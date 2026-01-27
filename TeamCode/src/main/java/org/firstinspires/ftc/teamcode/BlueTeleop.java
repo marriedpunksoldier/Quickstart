@@ -18,30 +18,41 @@ import org.firstinspires.ftc.robotcore.external.navigation.Pose3D;
 import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 
 import java.util.List;
-@TeleOp(name="Blue Teleop", group="Teleop")
-public class BlueTeleop extends OpMode{
+
+@TeleOp(name = "Blue Teleop", group = "Teleop")
+public class BlueTeleop extends OpMode {
+
     // ═══════════════════════════════════════════════════════════════════
     // DISTANCE-POWER LOOKUP TABLE
     // ═══════════════════════════════════════════════════════════════════
     // Distances in inches
-    private static final double[] DISTANCE_PRESETS = {24.0, 36.0, 48.0, 60.0, 72.0, 120.0};
+    private static final double[] DISTANCE_PRESETS = {24.0, 36.0, 48.0, 60.0, 72.0, 84.0, 96.0, 108.0, 120.0};
     // Corresponding power levels (0.0 - 1.0)
-    private static final double[] POWER_PRESETS =    {0.55, 0.65, 0.60, 0.75, 0.85, 1.00};
+    private static final double[] POWER_PRESETS =    {0.50, 0.55, 0.60, 0.65, 0.70, 0.75, 0.80, 0.90, 1.00};
     // Distance preset names for display
-    private static final String[] DISTANCE_NAMES = {"2 ft", "3 ft", "4 ft", "5 ft", "6 ft", "10 ft"};
+    private static final String[] DISTANCE_NAMES = {"2 ft", "3 ft", "4 ft", "5 ft", "6 ft", "7 ft", "8 ft", "9 ft", "10 ft"};
 
     private int currentDistanceIndex = 0;  // Start at 24"
 
     // ═══════════════════════════════════════════════════════════════════
     // AUTO-DISTANCE MODE
     // ═══════════════════════════════════════════════════════════════════
-    private boolean autoDistanceMode = false;  // Toggle with Y button
+    private boolean autoDistanceMode = true;  // Default AUTO, Y button toggles to manual
     private double limelightDistance = 0;      // Distance from Limelight in inches
     private double autoPowerLevel = 0;         // Interpolated power level
     private boolean limelightHasTarget = false;
+    private double limelightTx = 0;            // Horizontal offset in degrees
 
     // Target AprilTag ID for distance calculation (set to your scoring target)
     private static final int TARGET_APRILTAG_ID = 20;  // -1 = use any/closest tag
+
+    // Turret direct angle mapping for goBILDA Super Speed servo at 90° range
+    // 90 degrees across full servo range (0.0 to 1.0), so 90 degrees per unit
+    private static final double TURRET_DEGREES_PER_SERVO_UNIT = 90.0;
+
+    // Turret lock-on state
+    private boolean turretLockedOn = false;
+    private double lastKnownTx = 0;  // Last known target offset when locked
 
     // ═══════════════════════════════════════════════════════════════════
 
@@ -70,10 +81,10 @@ public class BlueTeleop extends OpMode{
     private static final double TICKS_PER_SECOND_AT_MAX_RPM = (MOTOR_MAX_RPM / 60.0) * MOTOR_TICKS_PER_REV;
 
     // PIDF coefficients (from testing)
-    private static final double SHOOTER_KP = 9.0;
+    private static final double SHOOTER_KP = 9.5;
     private static final double SHOOTER_KI = 0.100;
-    private static final double SHOOTER_KD = 0.1;
-    private static final double SHOOTER_KF = 12.5;
+    private static final double SHOOTER_KD = 0.0;
+    private static final double SHOOTER_KF = 18.0;
 
     // Velocity verification
     private static final double VELOCITY_TOLERANCE_PERCENT = 2.0;
@@ -83,13 +94,13 @@ public class BlueTeleop extends OpMode{
     // Servo positions and motor powers
     private static final double INTAKE_POWER = 1.0;
     private static final double TURRET_CENTER = 0.5;
-    private static final double TURRET_MIN = 0.2;
-    private static final double TURRET_MAX = 0.8;
+    private static final double TURRET_MIN = 0.0;
+    private static final double TURRET_MAX = 1.0;
     private static final double PUSHER_RETRACTED = 0.2;
     private static final double PUSHER_EXTENDED = 0.5;
 
     // Limelight settings
-    private static final int LIMELIGHT_PIPELINE = 5;  // Pipeline with AprilTag detection
+    private static final int LIMELIGHT_PIPELINE = 5;
 
     // Shooter state tracking
     private double currentTargetVelocity = 0;
@@ -103,7 +114,7 @@ public class BlueTeleop extends OpMode{
     // Button debouncing
     private boolean lastDpadUp = false;
     private boolean lastDpadDown = false;
-    private boolean lastRightBumper = false;
+    private boolean lastRightTrigger = false;
     private boolean lastYButton = false;
 
     // ═══════════════════════════════════════════════════════════════════
@@ -159,7 +170,7 @@ public class BlueTeleop extends OpMode{
 
         // Display initialization
         telemetry.addLine("════════════════════════════════");
-        telemetry.addLine("RED TELEOP - AUTO DISTANCE");
+        telemetry.addLine("BLUE TELEOP - AUTO DISTANCE");
         telemetry.addLine("════════════════════════════════");
         telemetry.addLine("Distance-Power Table:");
         for (int i = 0; i < DISTANCE_PRESETS.length; i++) {
@@ -215,6 +226,7 @@ public class BlueTeleop extends OpMode{
         limelightHasTarget = false;
         limelightDistance = 0;
         autoPowerLevel = 0;
+        limelightTx = 0;
 
         if (!limelightConnected) {
             return;
@@ -266,6 +278,8 @@ public class BlueTeleop extends OpMode{
         if (targetTag != null && limelightDistance > 0) {
             limelightHasTarget = true;
             autoPowerLevel = interpolatePower(limelightDistance);
+            // Get horizontal offset for turret tracking (positive = target is to the right)
+            limelightTx = targetTag.getTargetXDegrees();
         }
     }
 
@@ -287,7 +301,7 @@ public class BlueTeleop extends OpMode{
             if (distance >= DISTANCE_PRESETS[i] && distance <= DISTANCE_PRESETS[i + 1]) {
                 // Linear interpolation
                 double t = (distance - DISTANCE_PRESETS[i]) /
-                        (DISTANCE_PRESETS[i + 1] - DISTANCE_PRESETS[i]);
+                           (DISTANCE_PRESETS[i + 1] - DISTANCE_PRESETS[i]);
                 return POWER_PRESETS[i] + t * (POWER_PRESETS[i + 1] - POWER_PRESETS[i]);
             }
         }
@@ -302,9 +316,10 @@ public class BlueTeleop extends OpMode{
 
     private void handleDrive() {
         // Get joystick inputs (field-centric via Pedro Pathing)
-        double forward = -gamepad1.left_stick_y;  // Forward/backward
-        double strafe = gamepad1.left_stick_x;    // Left/right
-        double rotate = gamepad1.right_stick_x;   // Rotation
+        // Negate Y axis because pushing forward gives negative values
+        double forward = -gamepad1.left_stick_y;   // Forward/backward
+        double strafe = -gamepad1.left_stick_x;    // Left/right
+        double rotate = -gamepad1.right_stick_x;   // Rotation
 
         // Apply deadzone
         if (Math.abs(forward) < 0.05) forward = 0;
@@ -358,12 +373,12 @@ public class BlueTeleop extends OpMode{
     }
 
     // ═══════════════════════════════════════════════════════════════════
-    // SHOOTER CONTROL - GAMEPAD 2 (RIGHT TRIGGER)
+    // SHOOTER CONTROL - GAMEPAD 2 (RIGHT BUMPER)
     // ═══════════════════════════════════════════════════════════════════
 
     private void handleShooter() {
-        // Right trigger: Spin up shooter at selected power level
-        if (gamepad2.right_trigger > 0.5) {
+        // Right bumper: Spin up shooter at selected power level
+        if (gamepad2.right_bumper) {
             if (!shooterRunning) {
                 startShooter();
             } else if (autoDistanceMode && limelightHasTarget) {
@@ -426,34 +441,34 @@ public class BlueTeleop extends OpMode{
     }
 
     // ═══════════════════════════════════════════════════════════════════
-    // PUSHER CONTROL - GAMEPAD 2 (RIGHT BUMPER)
+    // PUSHER CONTROL - GAMEPAD 2 (RIGHT TRIGGER)
     // ═══════════════════════════════════════════════════════════════════
 
     private void handlePusher() {
-        boolean rightBumper = gamepad2.right_bumper;
+        boolean rightTrigger = gamepad2.right_trigger > 0.5;
 
-        // Right bumper: Push sample
-        if (rightBumper && !lastRightBumper) {
+        // Right trigger: Push sample
+        if (rightTrigger && !lastRightTrigger) {
             pusherServo.setPosition(PUSHER_EXTENDED);
-        } else if (!rightBumper && lastRightBumper) {
+        } else if (!rightTrigger && lastRightTrigger) {
             pusherServo.setPosition(PUSHER_RETRACTED);
         }
 
-        lastRightBumper = rightBumper;
+        lastRightTrigger = rightTrigger;
     }
 
     // ═══════════════════════════════════════════════════════════════════
-    // INTAKE CONTROL - GAMEPAD 2 (LEFT TRIGGER / LEFT BUMPER)
+    // INTAKE CONTROL - GAMEPAD 2 (LEFT BUMPER / LEFT TRIGGER)
     // ═══════════════════════════════════════════════════════════════════
 
     private void handleIntake() {
-        // Left trigger: Run intake forward
-        if (gamepad2.left_trigger > 0.5) {
+        // Left bumper: Run intake forward
+        if (gamepad2.left_bumper) {
             frontIntake.setPower(INTAKE_POWER);
             rearIntake.setPower(INTAKE_POWER);
         }
-        // Left bumper: Reverse intake
-        else if (gamepad2.left_bumper) {
+        // Left trigger: Reverse intake
+        else if (gamepad2.left_trigger > 0.5) {
             frontIntake.setPower(-INTAKE_POWER);
             rearIntake.setPower(-INTAKE_POWER);
         }
@@ -469,16 +484,51 @@ public class BlueTeleop extends OpMode{
     // ═══════════════════════════════════════════════════════════════════
 
     private void handleTurret() {
-        // D-pad Left/Right: Adjust turret position
+        // D-pad Left/Right: Manual turret adjustment (breaks lock and overrides auto-tracking)
         if (gamepad2.dpad_left) {
             turretPosition = Math.max(TURRET_MIN, turretPosition - TURRET_INCREMENT);
+            turretLockedOn = false;  // Manual control breaks lock
         } else if (gamepad2.dpad_right) {
             turretPosition = Math.min(TURRET_MAX, turretPosition + TURRET_INCREMENT);
+            turretLockedOn = false;  // Manual control breaks lock
+        }
+        // Auto-track AprilTag when in auto mode
+        else if (autoDistanceMode) {
+            // Update lock state and tracking
+            if (limelightHasTarget) {
+                // Target visible - lock on and track
+                turretLockedOn = true;
+                lastKnownTx = limelightTx;
+
+                // Calculate target servo position
+                double servoOffset = limelightTx / TURRET_DEGREES_PER_SERVO_UNIT;
+                double targetPosition = TURRET_CENTER - servoOffset;
+
+                // Check if target is within servo range
+                if (targetPosition >= TURRET_MIN && targetPosition <= TURRET_MAX) {
+                    // Target is in range - track it
+                    turretPosition = targetPosition;
+                } else {
+                    // Target moved out of servo range - break lock
+                    turretLockedOn = false;
+                    // Clamp to limit so turret stays at edge
+                    turretPosition = Math.max(TURRET_MIN, Math.min(TURRET_MAX, targetPosition));
+                }
+            } else if (turretLockedOn) {
+                // Target not visible but we're locked on - maintain last position
+                // The turret stays where it was, waiting for target to reappear
+                // Lock only breaks if:
+                // 1. Target reappears outside servo range
+                // 2. Manual control is used (D-pad)
+                // 3. A button is pressed to center
+            }
+            // If not locked and no target, turret stays at current position
         }
 
-        // A button: Center turret
+        // A button: Center turret and break lock
         if (gamepad2.a) {
             turretPosition = TURRET_CENTER;
+            turretLockedOn = false;
         }
 
         turretGear.setPosition(turretPosition);
@@ -491,7 +541,7 @@ public class BlueTeleop extends OpMode{
     private void displayTelemetry() {
         // Header
         telemetry.addLine("═══════════════════════════════════════");
-        telemetry.addLine("RED TELEOP");
+        telemetry.addLine("BLUE TELEOP");
         telemetry.addLine("═══════════════════════════════════════");
 
         // Auto-Distance Mode Status
@@ -543,7 +593,21 @@ public class BlueTeleop extends OpMode{
         telemetry.addLine("\n─── MECHANISMS ───");
         telemetry.addData("Intake", frontIntake.getPower() > 0 ? "FORWARD" :
                 (frontIntake.getPower() < 0 ? "REVERSE" : "OFF"));
-        telemetry.addData("Turret", String.format("%.2f", turretPosition));
+
+        // Turret with lock-on and tracking info
+        String turretStatus = String.format("%.2f", turretPosition);
+        if (autoDistanceMode) {
+            if (turretLockedOn) {
+                if (limelightHasTarget) {
+                    turretStatus += String.format(" [LOCKED tx:%.1f°]", limelightTx);
+                } else {
+                    turretStatus += " [LOCKED - searching]";
+                }
+            } else {
+                turretStatus += " [UNLOCKED]";
+            }
+        }
+        telemetry.addData("Turret", turretStatus);
         telemetry.addData("Pusher", pusherServo.getPosition() > 0.3 ? "EXTENDED" : "RETRACTED");
 
         // Limelight Info
@@ -552,8 +616,8 @@ public class BlueTeleop extends OpMode{
         // Controls Reference (compact)
         telemetry.addLine("\n─── CONTROLS ───");
         telemetry.addLine("GP1: Sticks=Drive");
-        telemetry.addLine("GP2: Y=AutoMode, D-pad=Dist/Turret");
-        telemetry.addLine("GP2: RT=Shoot, RB=Push, LT=Intake");
+        telemetry.addLine("GP2: Y=Manual, D-pad=Dist/Turret");
+        telemetry.addLine("GP2: RB=Shoot, RT=Push, LB=Intake");
 
         telemetry.update();
     }

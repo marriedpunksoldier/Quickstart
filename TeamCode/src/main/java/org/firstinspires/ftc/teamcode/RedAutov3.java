@@ -19,8 +19,8 @@ import org.firstinspires.ftc.robotcore.external.navigation.Pose3D;
 import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 import java.util.List;
 
-@Autonomous(name = "BlueAutov3", group = "Autonomous")
-public class BlueAutov3 extends OpMode {
+@Autonomous(name = "RedAutov3", group = "Autonomous")
+public class RedAutov3 extends OpMode {
     // Pedro Pathing
     private Follower follower;
     private Timer pathTimer, actionTimer, opmodeTimer;
@@ -81,10 +81,10 @@ public class BlueAutov3 extends OpMode {
     private static final double TURRET_DEGREES_PER_SERVO_UNIT = 90.0;
 
     // Target AprilTag ID (-1 = use any/closest tag)
-    private static final int TARGET_APRILTAG_ID = 20;
+    private static final int TARGET_APRILTAG_ID = 24;
 
     // Limelight settings
-    private static final int LIMELIGHT_PIPELINE = 5;
+    private static final int LIMELIGHT_PIPELINE = 6;  // Preset for AprilTag detection
 
     // ═══════════════════════════════════════════════════════════════════
 
@@ -115,25 +115,25 @@ public class BlueAutov3 extends OpMode {
 
     // ==================== Poses ====================
     // Start position
-    private final Pose startPose = new Pose(56, 8, Math.toRadians(90));
+    private final Pose startPose = new Pose(88, 8, Math.toRadians(90));
 
     // Shooting positions
-    private final Pose shoot1Pose = new Pose(66.8995, 86.827, Math.toRadians(143));
-    private final Pose shoot2Pose = new Pose(66.8995, 86.827, Math.toRadians(143));
-    private final Pose shoot3Pose = new Pose(66.8995, 86.827, Math.toRadians(143));
-    private final Pose shoot4Pose = new Pose(66.8995, 86.827, Math.toRadians(143));
+    private final Pose shoot1Pose = new Pose(83.88599670510709, 96.3163097199341, Math.toRadians(45));
+    private final Pose shoot2Pose = new Pose(83.88599670510709, 96.3163097199341, Math.toRadians(45));
+    private final Pose shoot3Pose = new Pose(83.88599670510709, 96.3163097199341, Math.toRadians(45));
+    private final Pose shoot4Pose = new Pose(83.88599670510709, 96.3163097199341, Math.toRadians(45));
 
     // Waypoints for sample sweeping
-    private final Pose waypoint1Pose = new Pose(53.14, 35.1104, Math.toRadians(180));
-    private final Pose waypoint2Pose = new Pose(29.1796, 35.5848, Math.toRadians(180));
-    private final Pose waypoint3Pose = new Pose(53.14, 35.1104, Math.toRadians(180));
+    private final Pose waypoint1Pose = new Pose(102.72158154859966, 35.58484349258651, Math.toRadians(0));
+    private final Pose waypoint2Pose = new Pose(129.2915980230642, 35.34761120263588, Math.toRadians(0));
+    private final Pose waypoint3Pose = new Pose(102.72158154859966, 35.58484349258651, Math.toRadians(0));
 
-    private final Pose waypoint4Pose = new Pose(52.6656, 60.0198, Math.toRadians(180));
-    private final Pose waypoint5Pose = new Pose(32.5008, 59.7825, Math.toRadians(180));
-    private final Pose waypoint6Pose = new Pose(52.6656, 60.0198, Math.toRadians(143));
+    private final Pose waypoint4Pose = new Pose(101, 59.30807248764413, Math.toRadians(0));
+    private final Pose waypoint5Pose = new Pose(129, 59.54530477759474, Math.toRadians(0));
+    private final Pose waypoint6Pose = new Pose(101, 59.30807248764413, Math.toRadians(0));
 
-    private final Pose waypoint7Pose = new Pose(48.1582, 83.743, Math.toRadians(180));
-    private final Pose waypoint8Pose = new Pose(29.1796, 83.743, Math.toRadians(180));
+    private final Pose waypoint7Pose = new Pose(102.66128500823724, 84.21746293245471, Math.toRadians(0));
+    private final Pose waypoint8Pose = new Pose(128, 83.2685337726524, Math.toRadians(0));
 
     // ==================== Path Chains ====================
     private PathChain path1_toShoot1;
@@ -153,73 +153,73 @@ public class BlueAutov3 extends OpMode {
         // Path 1: Start -> Shoot 1
         path1_toShoot1 = follower.pathBuilder()
                 .addPath(new BezierLine(startPose, shoot1Pose))
-                .setLinearHeadingInterpolation(Math.toRadians(90), Math.toRadians(143))
+                .setLinearHeadingInterpolation(Math.toRadians(90), Math.toRadians(45))
                 .build();
 
         // Path 2: Shoot 1 -> Waypoint 1
         path2_toWaypoint1 = follower.pathBuilder()
                 .addPath(new BezierLine(shoot1Pose, waypoint1Pose))
-                .setLinearHeadingInterpolation(Math.toRadians(180), Math.toRadians(180))
+                .setLinearHeadingInterpolation(Math.toRadians(45), Math.toRadians(0))
                 .build();
 
         // Path 3: Waypoint 1 -> Waypoint 2
         path3_toWaypoint2 = follower.pathBuilder()
                 .addPath(new BezierLine(waypoint1Pose, waypoint2Pose))
-                .setLinearHeadingInterpolation(Math.toRadians(180), Math.toRadians(180))
+                .setLinearHeadingInterpolation(Math.toRadians(0), Math.toRadians(0))
                 .build();
 
         // Path 4: Waypoint 2 -> Waypoint 3
         path4_toWaypoint3 = follower.pathBuilder()
                 .addPath(new BezierLine(waypoint2Pose, waypoint3Pose))
-                .setLinearHeadingInterpolation(Math.toRadians(180), Math.toRadians(180))
+                .setLinearHeadingInterpolation(Math.toRadians(0), Math.toRadians(0))
                 .build();
 
         // Path 5: Waypoint 3 -> Shoot 2
         path5_toShoot2 = follower.pathBuilder()
                 .addPath(new BezierLine(waypoint3Pose, shoot2Pose))
-                .setLinearHeadingInterpolation(Math.toRadians(180), Math.toRadians(143))
+                .setLinearHeadingInterpolation(Math.toRadians(0), Math.toRadians(45))
                 .build();
 
         // Path 6: Shoot 2 -> Waypoint 4
         path6_toWaypoint4 = follower.pathBuilder()
                 .addPath(new BezierLine(shoot2Pose, waypoint4Pose))
-                .setLinearHeadingInterpolation(Math.toRadians(143), Math.toRadians(180))
+                .setLinearHeadingInterpolation(Math.toRadians(45), Math.toRadians(0))
                 .build();
 
         // Path 7: Waypoint 4 -> Waypoint 5
         path7_toWaypoint5 = follower.pathBuilder()
                 .addPath(new BezierLine(waypoint4Pose, waypoint5Pose))
-                .setLinearHeadingInterpolation(Math.toRadians(180), Math.toRadians(180))
+                .setLinearHeadingInterpolation(Math.toRadians(0), Math.toRadians(0))
                 .build();
 
         // Path 8: Waypoint 5 -> Waypoint 6
         path8_toWaypoint6 = follower.pathBuilder()
                 .addPath(new BezierLine(waypoint5Pose, waypoint6Pose))
-                .setLinearHeadingInterpolation(Math.toRadians(180), Math.toRadians(143))
+                .setLinearHeadingInterpolation(Math.toRadians(0), Math.toRadians(45))
                 .build();
 
         // Path 9: Waypoint 6 -> Shoot 3
         path9_toShoot3 = follower.pathBuilder()
                 .addPath(new BezierLine(waypoint6Pose, shoot3Pose))
-                .setLinearHeadingInterpolation(Math.toRadians(143), Math.toRadians(143))
+                .setLinearHeadingInterpolation(Math.toRadians(45), Math.toRadians(45))
                 .build();
 
         // Path 10: Shoot 3 -> Waypoint 7
         path10_toWaypoint7 = follower.pathBuilder()
                 .addPath(new BezierLine(shoot3Pose, waypoint7Pose))
-                .setLinearHeadingInterpolation(Math.toRadians(143), Math.toRadians(180))
+                .setLinearHeadingInterpolation(Math.toRadians(45), Math.toRadians(0))
                 .build();
 
         // Path 11: Waypoint 7 -> Waypoint 8
         path11_toWaypoint8 = follower.pathBuilder()
                 .addPath(new BezierLine(waypoint7Pose, waypoint8Pose))
-                .setLinearHeadingInterpolation(Math.toRadians(180), Math.toRadians(180))
+                .setLinearHeadingInterpolation(Math.toRadians(0), Math.toRadians(0))
                 .build();
 
         // Path 12: Waypoint 8 -> Shoot 4 (End)
         path12_toShoot4 = follower.pathBuilder()
                 .addPath(new BezierLine(waypoint8Pose, shoot4Pose))
-                .setLinearHeadingInterpolation(Math.toRadians(180), Math.toRadians(143))
+                .setLinearHeadingInterpolation(Math.toRadians(0), Math.toRadians(45))
                 .build();
     }
 
@@ -341,7 +341,7 @@ public class BlueAutov3 extends OpMode {
             double distance = Math.sqrt(x*x + y*y + z*z);
 
             // Check if this is our target tag or the closest one
-            if (TARGET_APRILTAG_ID == 20) {
+            if (TARGET_APRILTAG_ID == 24) {
                 // Use closest tag
                 if (distance < closestDistance) {
                     closestDistance = distance;
@@ -380,7 +380,7 @@ public class BlueAutov3 extends OpMode {
         for (int i = 0; i < DISTANCE_PRESETS.length - 1; i++) {
             if (distance >= DISTANCE_PRESETS[i] && distance <= DISTANCE_PRESETS[i + 1]) {
                 double t = (distance - DISTANCE_PRESETS[i]) /
-                           (DISTANCE_PRESETS[i + 1] - DISTANCE_PRESETS[i]);
+                        (DISTANCE_PRESETS[i + 1] - DISTANCE_PRESETS[i]);
                 return POWER_PRESETS[i] + t * (POWER_PRESETS[i + 1] - POWER_PRESETS[i]);
             }
         }
@@ -783,7 +783,7 @@ public class BlueAutov3 extends OpMode {
 
         // Display initialization info
         telemetry.addLine("════════════════════════════════");
-        telemetry.addLine("BlueAutov3 - AUTO DISTANCE");
+        telemetry.addLine("RedAutov3 - AUTO DISTANCE");
         telemetry.addLine("════════════════════════════════");
         telemetry.addLine("Localization: Pinpoint ONLY");
         telemetry.addLine("Limelight: Tracking & Power");

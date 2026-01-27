@@ -15,7 +15,7 @@ import com.qualcomm.robotcore.util.ElapsedTime;
  * mechanism using a goBILDA 5203 series 6000 RPM motor.
  *
  * Features:
- * - 5 distance presets (24, 36, 48, 60, 72 inches)
+ * - 5 distance presets (24, 36, 48, 60, 72, 84, 96, 108, 120 inches)
  * - 11 power levels (0% to 100% in 10% increments)
  * - 3 control modes: Manual, Menu, and Automatic Cycling
  * - Real-time PIDF coefficient tuning
@@ -57,10 +57,10 @@ public class FlywheelShooterTest extends LinearOpMode {
     private static final double TICKS_PER_SECOND_AT_MAX_RPM = (MOTOR_MAX_RPM / 60.0) * MOTOR_TICKS_PER_REV;
     
     // Distance presets in inches
-    private final int[] DISTANCE_PRESETS = {24, 36, 48, 60, 72}; // 2ft, 3ft, 4ft, 5ft, 6ft
+    private final int[] DISTANCE_PRESETS = {24, 36, 48, 60, 72, 84, 96, 108, 120}; // 2ft, 3ft, 4ft, 5ft, 6ft, 7ft, 8ft, 9ft, 10ft
     
     // Power levels (0% to 100% in 10% increments)
-    private final double[] POWER_LEVELS = {0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0};
+    private final double[] POWER_LEVELS = {0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95, 1.0};
     
     // Current test settings
     private int currentDistanceIndex = 0;
