@@ -86,10 +86,10 @@ public class FlywheelShooterTest extends LinearOpMode {
     private final int MENU_ITEMS = 2; // Distance and Power selection
     
     // PIDF coefficients - starting values (will need tuning)
-    private double kP = 9.0;
-    private double kI = 0.100;
+    private double kP = 10.0;
+    private double kI = 0.1;
     private double kD = 0.1;
-    private double kF = 12.5; // Start with feedforward based on motor characteristics
+    private double kF = 12.0; // Start with feedforward based on motor characteristics
     
     // PIDF adjustment increments
     private static final double KP_INCREMENT = 0.5;

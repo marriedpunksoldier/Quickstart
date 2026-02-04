@@ -16,12 +16,12 @@ import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;
 
 public class Constants {
     public static FollowerConstants followerConstants = new FollowerConstants()
-            .mass(10.4326)
-            .forwardZeroPowerAcceleration(-53.7925637713365)
-            .lateralZeroPowerAcceleration(-70.8590242549006)
-            .translationalPIDFCoefficients(new PIDFCoefficients(0.4, 0.0, 0.03, 0.02))
-            .headingPIDFCoefficients(new PIDFCoefficients(1.0, 0.0, 0.01, 0.01))
-            .drivePIDFCoefficients(new FilteredPIDFCoefficients(0.01,0.0,0.0,0.6,0.01))
+            .mass(10.20583)
+            .forwardZeroPowerAcceleration(-47.47678691176189)
+            .lateralZeroPowerAcceleration(-82.19375016013265)
+            .translationalPIDFCoefficients(new PIDFCoefficients(0.3, 0.0, 0.01, 0.025))
+            .headingPIDFCoefficients(new PIDFCoefficients(0.9, 0.0, 0.01, 0.04))
+            .drivePIDFCoefficients(new FilteredPIDFCoefficients(0.3,0.0,0.005,0.6,0.25))
             .centripetalScaling(0.0005);
 
     public static MecanumConstants driveConstants = new MecanumConstants()
@@ -34,16 +34,16 @@ public class Constants {
             .leftRearMotorDirection(DcMotorSimple.Direction.FORWARD)
             .rightFrontMotorDirection(DcMotorSimple.Direction.REVERSE)
             .rightRearMotorDirection(DcMotorSimple.Direction.REVERSE)
-            .xVelocity(52.17012708769071)
-            .yVelocity(32.61927134596456);
+            .xVelocity(60.45640215535802)
+            .yVelocity(50.41999492495079);
 
     public static PinpointConstants localizerConstants = new PinpointConstants()
-            .forwardPodY(-2.5) // adjust based on your robot's configuration
-            .strafePodX(-7.5) // adjust based on your robot's configuration
+            .forwardPodY(1.5) // adjust based on your robot's configuration
+            .strafePodX(-4) // adjust based on your robot's configuration
             .distanceUnit(DistanceUnit.INCH)
             .hardwareMapName("pinpoint") // must match the name in your hardware map
             .encoderResolution(GoBildaPinpointDriver.GoBildaOdometryPods.goBILDA_4_BAR_POD)
-            .forwardEncoderDirection(GoBildaPinpointDriver.EncoderDirection.REVERSED)
+            .forwardEncoderDirection(GoBildaPinpointDriver.EncoderDirection.FORWARD)
             .strafeEncoderDirection(GoBildaPinpointDriver.EncoderDirection.REVERSED);
 
     public static PathConstraints pathConstraints = new PathConstraints(0.99,

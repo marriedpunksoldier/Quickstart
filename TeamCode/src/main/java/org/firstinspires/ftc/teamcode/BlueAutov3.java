@@ -28,7 +28,6 @@ public class BlueAutov3 extends OpMode {
 
     // Hardware
     private DcMotor frontIntake;
-    private DcMotor rearIntake;
     private DcMotorEx shooter;
     private Servo turretGear;
     private Servo pusherServo;
@@ -41,11 +40,11 @@ public class BlueAutov3 extends OpMode {
     // DISTANCE-POWER LOOKUP TABLE (from RedTeleop)
     // ═══════════════════════════════════════════════════════════════════
     // Distances in inches
-    private static final double[] DISTANCE_PRESETS = {24.0, 36.0, 48.0, 60.0, 72.0, 84.0, 96.0, 108.0, 120.0};
+    private static final double[] DISTANCE_PRESETS = {24.0, 36.0, 48.0, 60.0, 72.0, 84.0};
     // Corresponding power levels (0.0 - 1.0)
-    private static final double[] POWER_PRESETS =    {0.55, 0.60, 0.65, 0.70, 0.75, 0.80, 0.85, 0.90, 1.00};
+    private static final double[] POWER_PRESETS =    {0.71, 0.77, 0.83, 0.89, 0.95, 1.0};
     // Distance preset names for display
-    private static final String[] DISTANCE_NAMES = {"2 ft", "3 ft", "4 ft", "5 ft", "6 ft", "7 ft", "8 ft", "9 ft", "10 ft"};
+    private static final String[] DISTANCE_NAMES = {"2 ft", "3 ft", "4 ft", "5 ft", "6 ft", "7 ft"};
 
     // Fallback power if no AprilTag detected
     private static final double FALLBACK_SHOOTER_POWER = 0.60;
@@ -60,10 +59,10 @@ public class BlueAutov3 extends OpMode {
     private static final double TICKS_PER_SECOND_AT_MAX_RPM = (MOTOR_MAX_RPM / 60.0) * MOTOR_TICKS_PER_REV;
 
     // PIDF coefficients (from testing)
-    private static final double SHOOTER_KP = 9.5;
+    private static final double SHOOTER_KP = 10.0;
     private static final double SHOOTER_KI = 0.100;
-    private static final double SHOOTER_KD = 0.0;
-    private static final double SHOOTER_KF = 18.0;
+    private static final double SHOOTER_KD = 0.1;
+    private static final double SHOOTER_KF = 12.0;
 
     // Velocity verification settings
     private static final double VELOCITY_TOLERANCE_PERCENT = 2.0;
@@ -227,12 +226,10 @@ public class BlueAutov3 extends OpMode {
 
     private void startIntake() {
         frontIntake.setPower(INTAKE_POWER);
-        rearIntake.setPower(INTAKE_POWER);
     }
 
     private void stopIntake() {
         frontIntake.setPower(0);
-        rearIntake.setPower(0);
     }
 
     /**
@@ -504,13 +501,16 @@ public class BlueAutov3 extends OpMode {
                 if (shooterVelocityReached ||
                         actionTimer.getElapsedTimeSeconds() > MAX_SPINUP_TIME) {
                     startIntake();  // Start intake after shooter is at speed
-                    pushSample();
+                    // Only use pusher after the second ball (ballsShot >= 2)
+                    if (ballsShot >= 2) {
+                        pushSample();
+                    }
                     setPathState(3);
                 }
                 break;
 
             case 3:
-                // Push complete, retract
+                // Wait for ball to shoot (push time if pusher used, otherwise just wait)
                 if (actionTimer.getElapsedTimeSeconds() > PUSH_TIME) {
                     retractPusher();
                     ballsShot++;
@@ -522,8 +522,10 @@ public class BlueAutov3 extends OpMode {
                 // Check if more balls to shoot at this position
                 if (actionTimer.getElapsedTimeSeconds() > RETRACT_TIME) {
                     if (ballsShot < BALLS_PER_POSITION) {
-                        // Shoot another ball
-                        pushSample();
+                        // Only use pusher after the second ball (ballsShot >= 2)
+                        if (ballsShot >= 2) {
+                            pushSample();
+                        }
                         setPathState(3);  // Go back to push completion check
                     } else {
                         // Done shooting, move to next waypoint
@@ -572,7 +574,10 @@ public class BlueAutov3 extends OpMode {
                 if (shooterVelocityReached ||
                         actionTimer.getElapsedTimeSeconds() > MAX_SPINUP_TIME) {
                     startIntake();  // Start intake after shooter is at speed
-                    pushSample();
+                    // Only use pusher after the second ball (ballsShot >= 2)
+                    if (ballsShot >= 2) {
+                        pushSample();
+                    }
                     setPathState(10);
                 }
                 break;
@@ -588,7 +593,10 @@ public class BlueAutov3 extends OpMode {
             case 11:
                 if (actionTimer.getElapsedTimeSeconds() > RETRACT_TIME) {
                     if (ballsShot < BALLS_PER_POSITION) {
-                        pushSample();
+                        // Only use pusher after the second ball (ballsShot >= 2)
+                        if (ballsShot >= 2) {
+                            pushSample();
+                        }
                         setPathState(10);
                     } else {
                         stopShooter();
@@ -635,7 +643,10 @@ public class BlueAutov3 extends OpMode {
                 if (shooterVelocityReached ||
                         actionTimer.getElapsedTimeSeconds() > MAX_SPINUP_TIME) {
                     startIntake();  // Start intake after shooter is at speed
-                    pushSample();
+                    // Only use pusher after the second ball (ballsShot >= 2)
+                    if (ballsShot >= 2) {
+                        pushSample();
+                    }
                     setPathState(17);
                 }
                 break;
@@ -651,7 +662,10 @@ public class BlueAutov3 extends OpMode {
             case 18:
                 if (actionTimer.getElapsedTimeSeconds() > RETRACT_TIME) {
                     if (ballsShot < BALLS_PER_POSITION) {
-                        pushSample();
+                        // Only use pusher after the second ball (ballsShot >= 2)
+                        if (ballsShot >= 2) {
+                            pushSample();
+                        }
                         setPathState(17);
                     } else {
                         stopShooter();
@@ -691,7 +705,10 @@ public class BlueAutov3 extends OpMode {
                 if (shooterVelocityReached ||
                         actionTimer.getElapsedTimeSeconds() > MAX_SPINUP_TIME) {
                     startIntake();  // Start intake after shooter is at speed
-                    pushSample();
+                    // Only use pusher after the second ball (ballsShot >= 2)
+                    if (ballsShot >= 2) {
+                        pushSample();
+                    }
                     setPathState(23);
                 }
                 break;
@@ -707,7 +724,10 @@ public class BlueAutov3 extends OpMode {
             case 24:
                 if (actionTimer.getElapsedTimeSeconds() > RETRACT_TIME) {
                     if (ballsShot < BALLS_PER_POSITION) {
-                        pushSample();
+                        // Only use pusher after the second ball (ballsShot >= 2)
+                        if (ballsShot >= 2) {
+                            pushSample();
+                        }
                         setPathState(23);
                     } else {
                         // All done!
@@ -742,11 +762,8 @@ public class BlueAutov3 extends OpMode {
 
         // Initialize intake motors
         frontIntake = hardwareMap.get(DcMotor.class, "frontIntake");
-        rearIntake = hardwareMap.get(DcMotor.class, "rearIntake");
         frontIntake.setDirection(DcMotorSimple.Direction.FORWARD);
-        rearIntake.setDirection(DcMotorSimple.Direction.REVERSE);
         frontIntake.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
-        rearIntake.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
 
         // Initialize shooter motor with velocity control
         shooter = hardwareMap.get(DcMotorEx.class, "shooter");
