@@ -13,14 +13,15 @@ import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
-import com.qualcomm.robotcore.hardware.PIDFCoefficients;
+// import com.qualcomm.robotcore.hardware.PIDFCoefficients;  // Removed - using direct power control
 import com.qualcomm.robotcore.hardware.Servo;
 import org.firstinspires.ftc.robotcore.external.navigation.Pose3D;
 import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 import java.util.List;
+import java.util.Locale;
 
-@Autonomous(name = "BlueAutov3", group = "Autonomous")
-public class BlueAutov3 extends OpMode {
+@Autonomous(name = "RedAutov3", group = "Autonomous")
+public class RedAutoLongv3 extends OpMode {
     // Pedro Pathing
     private Follower follower;
     private Timer pathTimer, actionTimer, opmodeTimer;
@@ -37,17 +38,10 @@ public class BlueAutov3 extends OpMode {
     private boolean limelightConnected = false;
 
     // ═══════════════════════════════════════════════════════════════════
-    // DISTANCE-POWER LOOKUP TABLE (from RedTeleop)
+    // SHOOTER POWER SETTING
     // ═══════════════════════════════════════════════════════════════════
-    // Distances in inches
-    private static final double[] DISTANCE_PRESETS = {24.0, 36.0, 48.0, 60.0, 72.0, 84.0};
-    // Corresponding power levels (0.0 - 1.0)
-    private static final double[] POWER_PRESETS =    {0.71, 0.77, 0.83, 0.89, 0.95, 1.0};
-    // Distance preset names for display
-    private static final String[] DISTANCE_NAMES = {"2 ft", "3 ft", "4 ft", "5 ft", "6 ft", "7 ft"};
-
-    // Fallback power if no AprilTag detected
-    private static final double FALLBACK_SHOOTER_POWER = 0.60;
+    // Fixed power level for autonomous (robot shoots from same position)
+    private static final double SHOOTER_POWER = 0.75;
 
     // ═══════════════════════════════════════════════════════════════════
     // FLYWHEEL SHOOTER CONFIGURATION
@@ -58,13 +52,13 @@ public class BlueAutov3 extends OpMode {
     private static final double MOTOR_MAX_RPM = 6000.0;
     private static final double TICKS_PER_SECOND_AT_MAX_RPM = (MOTOR_MAX_RPM / 60.0) * MOTOR_TICKS_PER_REV;
 
-    // PIDF coefficients (from testing)
-    private static final double SHOOTER_KP = 10.0;
-    private static final double SHOOTER_KI = 0.100;
-    private static final double SHOOTER_KD = 0.1;
-    private static final double SHOOTER_KF = 12.0;
+    // PIDF coefficients - DISABLED for direct power control
+    // private static final double SHOOTER_KP = 10.0;
+    // private static final double SHOOTER_KI = 0.100;
+    // private static final double SHOOTER_KD = 0.1;
+    // private static final double SHOOTER_KF = 12.0;
 
-    // Velocity verification settings
+    // Velocity verification settings (still used for telemetry)
     private static final double VELOCITY_TOLERANCE_PERCENT = 2.0;
     private static final double MAX_SPINUP_TIME = 2.0;
 
@@ -80,10 +74,10 @@ public class BlueAutov3 extends OpMode {
     private static final double TURRET_DEGREES_PER_SERVO_UNIT = 90.0;
 
     // Target AprilTag ID (-1 = use any/closest tag)
-    private static final int TARGET_APRILTAG_ID = 20;
+    private static final int TARGET_APRILTAG_ID = 24;
 
     // Limelight settings
-    private static final int LIMELIGHT_PIPELINE = 5;
+    private static final int LIMELIGHT_PIPELINE = 2;  // Preset for AprilTag detection
 
     // ═══════════════════════════════════════════════════════════════════
 
@@ -105,34 +99,33 @@ public class BlueAutov3 extends OpMode {
     private int currentShotNumber = 0;
     private int ballsShot = 0;  // Track balls shot at current position
 
-    // AprilTag tracking state
+    // AprilTag tracking state (for turret aiming only)
     private boolean limelightHasTarget = false;
     private double limelightDistance = 0;
     private double limelightTx = 0;
-    private double autoPowerLevel = 0;
     private double turretPosition = TURRET_CENTER;
 
     // ==================== Poses ====================
     // Start position
-    private final Pose startPose = new Pose(56, 8, Math.toRadians(90));
+    private final Pose startPose = new Pose(88, 8, Math.toRadians(90));
 
     // Shooting positions
-    private final Pose shoot1Pose = new Pose(66.8995, 86.827, Math.toRadians(143));
-    private final Pose shoot2Pose = new Pose(66.8995, 86.827, Math.toRadians(143));
-    private final Pose shoot3Pose = new Pose(66.8995, 86.827, Math.toRadians(143));
-    private final Pose shoot4Pose = new Pose(66.8995, 86.827, Math.toRadians(143));
+    private final Pose shoot1Pose = new Pose(95.14332784184514, 106.69522240527183, Math.toRadians(45));
+    private final Pose shoot2Pose = new Pose(95.14332784184514, 106.69522240527183, Math.toRadians(45));
+    private final Pose shoot3Pose = new Pose(95.14332784184514, 106.69522240527183, Math.toRadians(45));
+    private final Pose shoot4Pose = new Pose(95.14332784184514, 106.69522240527183, Math.toRadians(45));
 
     // Waypoints for sample sweeping
-    private final Pose waypoint1Pose = new Pose(53.14, 35.1104, Math.toRadians(180));
-    private final Pose waypoint2Pose = new Pose(29.1796, 35.5848, Math.toRadians(180));
-    private final Pose waypoint3Pose = new Pose(53.14, 35.1104, Math.toRadians(180));
+    private final Pose waypoint1Pose = new Pose(102.72158154859966, 35.58484349258651, Math.toRadians(0));
+    private final Pose waypoint2Pose = new Pose(129.2915980230642, 35.34761120263588, Math.toRadians(0));
+    private final Pose waypoint3Pose = new Pose(102.72158154859966, 35.58484349258651, Math.toRadians(0));
 
-    private final Pose waypoint4Pose = new Pose(52.6656, 60.0198, Math.toRadians(180));
-    private final Pose waypoint5Pose = new Pose(32.5008, 59.7825, Math.toRadians(180));
-    private final Pose waypoint6Pose = new Pose(52.6656, 60.0198, Math.toRadians(143));
+    private final Pose waypoint4Pose = new Pose(101, 59.30807248764413, Math.toRadians(0));
+    private final Pose waypoint5Pose = new Pose(129, 59.54530477759474, Math.toRadians(0));
+    private final Pose waypoint6Pose = new Pose(101, 59.30807248764413, Math.toRadians(0));
 
-    private final Pose waypoint7Pose = new Pose(48.1582, 83.743, Math.toRadians(180));
-    private final Pose waypoint8Pose = new Pose(29.1796, 83.743, Math.toRadians(180));
+    private final Pose waypoint7Pose = new Pose(102.66128500823724, 84.21746293245471, Math.toRadians(0));
+    private final Pose waypoint8Pose = new Pose(128, 83.2685337726524, Math.toRadians(0));
 
     // ==================== Path Chains ====================
     private PathChain path1_toShoot1;
@@ -152,73 +145,73 @@ public class BlueAutov3 extends OpMode {
         // Path 1: Start -> Shoot 1
         path1_toShoot1 = follower.pathBuilder()
                 .addPath(new BezierLine(startPose, shoot1Pose))
-                .setLinearHeadingInterpolation(Math.toRadians(90), Math.toRadians(143))
+                .setLinearHeadingInterpolation(Math.toRadians(90), Math.toRadians(45))
                 .build();
 
         // Path 2: Shoot 1 -> Waypoint 1
         path2_toWaypoint1 = follower.pathBuilder()
                 .addPath(new BezierLine(shoot1Pose, waypoint1Pose))
-                .setLinearHeadingInterpolation(Math.toRadians(180), Math.toRadians(180))
+                .setLinearHeadingInterpolation(Math.toRadians(45), Math.toRadians(0))
                 .build();
 
         // Path 3: Waypoint 1 -> Waypoint 2
         path3_toWaypoint2 = follower.pathBuilder()
                 .addPath(new BezierLine(waypoint1Pose, waypoint2Pose))
-                .setLinearHeadingInterpolation(Math.toRadians(180), Math.toRadians(180))
+                .setLinearHeadingInterpolation(Math.toRadians(0), Math.toRadians(0))
                 .build();
 
         // Path 4: Waypoint 2 -> Waypoint 3
         path4_toWaypoint3 = follower.pathBuilder()
                 .addPath(new BezierLine(waypoint2Pose, waypoint3Pose))
-                .setLinearHeadingInterpolation(Math.toRadians(180), Math.toRadians(180))
+                .setLinearHeadingInterpolation(Math.toRadians(0), Math.toRadians(0))
                 .build();
 
         // Path 5: Waypoint 3 -> Shoot 2
         path5_toShoot2 = follower.pathBuilder()
                 .addPath(new BezierLine(waypoint3Pose, shoot2Pose))
-                .setLinearHeadingInterpolation(Math.toRadians(180), Math.toRadians(143))
+                .setLinearHeadingInterpolation(Math.toRadians(0), Math.toRadians(45))
                 .build();
 
         // Path 6: Shoot 2 -> Waypoint 4
         path6_toWaypoint4 = follower.pathBuilder()
                 .addPath(new BezierLine(shoot2Pose, waypoint4Pose))
-                .setLinearHeadingInterpolation(Math.toRadians(143), Math.toRadians(180))
+                .setLinearHeadingInterpolation(Math.toRadians(45), Math.toRadians(0))
                 .build();
 
         // Path 7: Waypoint 4 -> Waypoint 5
         path7_toWaypoint5 = follower.pathBuilder()
                 .addPath(new BezierLine(waypoint4Pose, waypoint5Pose))
-                .setLinearHeadingInterpolation(Math.toRadians(180), Math.toRadians(180))
+                .setLinearHeadingInterpolation(Math.toRadians(0), Math.toRadians(0))
                 .build();
 
         // Path 8: Waypoint 5 -> Waypoint 6
         path8_toWaypoint6 = follower.pathBuilder()
                 .addPath(new BezierLine(waypoint5Pose, waypoint6Pose))
-                .setLinearHeadingInterpolation(Math.toRadians(180), Math.toRadians(143))
+                .setLinearHeadingInterpolation(Math.toRadians(0), Math.toRadians(45))
                 .build();
 
         // Path 9: Waypoint 6 -> Shoot 3
         path9_toShoot3 = follower.pathBuilder()
                 .addPath(new BezierLine(waypoint6Pose, shoot3Pose))
-                .setLinearHeadingInterpolation(Math.toRadians(143), Math.toRadians(143))
+                .setLinearHeadingInterpolation(Math.toRadians(45), Math.toRadians(45))
                 .build();
 
         // Path 10: Shoot 3 -> Waypoint 7
         path10_toWaypoint7 = follower.pathBuilder()
                 .addPath(new BezierLine(shoot3Pose, waypoint7Pose))
-                .setLinearHeadingInterpolation(Math.toRadians(143), Math.toRadians(180))
+                .setLinearHeadingInterpolation(Math.toRadians(45), Math.toRadians(0))
                 .build();
 
         // Path 11: Waypoint 7 -> Waypoint 8
         path11_toWaypoint8 = follower.pathBuilder()
                 .addPath(new BezierLine(waypoint7Pose, waypoint8Pose))
-                .setLinearHeadingInterpolation(Math.toRadians(180), Math.toRadians(180))
+                .setLinearHeadingInterpolation(Math.toRadians(0), Math.toRadians(0))
                 .build();
 
         // Path 12: Waypoint 8 -> Shoot 4 (End)
         path12_toShoot4 = follower.pathBuilder()
                 .addPath(new BezierLine(waypoint8Pose, shoot4Pose))
-                .setLinearHeadingInterpolation(Math.toRadians(180), Math.toRadians(143))
+                .setLinearHeadingInterpolation(Math.toRadians(0), Math.toRadians(45))
                 .build();
     }
 
@@ -233,27 +226,18 @@ public class BlueAutov3 extends OpMode {
     }
 
     /**
-     * Start shooter with velocity control.
-     * Uses Limelight distance-based power if AprilTag visible,
-     * otherwise falls back to preset power level.
+     * Start shooter with fixed power.
+     * Uses constant power since robot shoots from same position in auto.
      */
     private void startShooter(int shotNumber) {
         currentShotNumber = shotNumber;
         shooterVelocityReached = false;
 
-        // Use auto-calculated power if AprilTag visible, otherwise fallback
-        double powerLevel;
-        if (limelightHasTarget && autoPowerLevel > 0) {
-            powerLevel = autoPowerLevel;
-        } else {
-            powerLevel = FALLBACK_SHOOTER_POWER;
-        }
+        // Calculate target velocity (for telemetry)
+        currentTargetVelocity = SHOOTER_POWER * TICKS_PER_SECOND_AT_MAX_RPM;
 
-        // Calculate target velocity
-        currentTargetVelocity = powerLevel * TICKS_PER_SECOND_AT_MAX_RPM;
-
-        // Set velocity (PIDF controller handles the rest)
-        shooter.setVelocity(currentTargetVelocity);
+        // Direct power control
+        shooter.setPower(SHOOTER_POWER);
     }
 
     /**
@@ -297,14 +281,12 @@ public class BlueAutov3 extends OpMode {
 
     /**
      * Updates AprilTag tracking data from Limelight.
-     * Gets distance for power calculation and tx for turret aiming.
-     * Does NOT update robot pose - that comes only from Pinpoint.
+     * Gets tx for turret aiming. Power is fixed for autonomous.
      */
     private void updateLimelightTracking() {
         limelightHasTarget = false;
         limelightDistance = 0;
         limelightTx = 0;
-        autoPowerLevel = 0;
 
         if (!limelightConnected) {
             return;
@@ -338,7 +320,7 @@ public class BlueAutov3 extends OpMode {
             double distance = Math.sqrt(x*x + y*y + z*z);
 
             // Check if this is our target tag or the closest one
-            if (TARGET_APRILTAG_ID == 20) {
+            if (TARGET_APRILTAG_ID == -1) {
                 // Use closest tag
                 if (distance < closestDistance) {
                     closestDistance = distance;
@@ -354,36 +336,11 @@ public class BlueAutov3 extends OpMode {
 
         if (targetTag != null && limelightDistance > 0) {
             limelightHasTarget = true;
-            autoPowerLevel = interpolatePower(limelightDistance);
             // Get horizontal offset for turret tracking
             limelightTx = targetTag.getTargetXDegrees();
         }
     }
 
-    /**
-     * Interpolates power level based on distance using the lookup table.
-     * Uses linear interpolation between the two closest distance presets.
-     */
-    private double interpolatePower(double distance) {
-        // Clamp distance to table range
-        if (distance <= DISTANCE_PRESETS[0]) {
-            return POWER_PRESETS[0];
-        }
-        if (distance >= DISTANCE_PRESETS[DISTANCE_PRESETS.length - 1]) {
-            return POWER_PRESETS[POWER_PRESETS.length - 1];
-        }
-
-        // Find the two closest presets and interpolate
-        for (int i = 0; i < DISTANCE_PRESETS.length - 1; i++) {
-            if (distance >= DISTANCE_PRESETS[i] && distance <= DISTANCE_PRESETS[i + 1]) {
-                double t = (distance - DISTANCE_PRESETS[i]) /
-                           (DISTANCE_PRESETS[i + 1] - DISTANCE_PRESETS[i]);
-                return POWER_PRESETS[i] + t * (POWER_PRESETS[i + 1] - POWER_PRESETS[i]);
-            }
-        }
-
-        return FALLBACK_SHOOTER_POWER;
-    }
 
     /**
      * Aims turret using AprilTag autotracking.
@@ -420,10 +377,9 @@ public class BlueAutov3 extends OpMode {
         telemetry.addData("AprilTag", limelightHasTarget ? "DETECTED" : "NOT FOUND");
 
         if (limelightHasTarget) {
-            telemetry.addData("Distance", "%.1f in", limelightDistance);
-            telemetry.addData("TX (offset)", "%.1f deg", limelightTx);
-            telemetry.addData("Auto Power", "%.0f%%", autoPowerLevel * 100);
-            telemetry.addData("Turret Pos", "%.3f", turretPosition);
+            telemetry.addData("Distance", String.format(Locale.US, "%.1f in", limelightDistance));
+            telemetry.addData("TX (offset)", String.format(Locale.US, "%.1f deg", limelightTx));
+            telemetry.addData("Turret Pos", String.format(Locale.US, "%.3f", turretPosition));
         }
 
         // Show detected tag IDs
@@ -450,23 +406,15 @@ public class BlueAutov3 extends OpMode {
 
         telemetry.addLine("─── SHOOTER ───");
         telemetry.addData("Position", currentShotNumber);
-        telemetry.addData("Balls Shot", "%d / %d", ballsShot, BALLS_PER_POSITION);
-
-        if (limelightHasTarget) {
-            telemetry.addData("Power Source", "AUTO (%.1f in)", limelightDistance);
-        } else {
-            telemetry.addData("Power Source", "FALLBACK");
-        }
-
-        telemetry.addData("Power Level", "%.0f%%",
-                (limelightHasTarget ? autoPowerLevel : FALLBACK_SHOOTER_POWER) * 100);
-        telemetry.addData("Current RPM", "%.0f", currentRPM);
-        telemetry.addData("Target RPM", "%.0f", targetRPM);
+        telemetry.addData("Balls Shot", String.format(Locale.US, "%d / %d", ballsShot, BALLS_PER_POSITION));
+        telemetry.addData("Power Level", String.format(Locale.US, "%.0f%%", SHOOTER_POWER * 100));
+        telemetry.addData("Current RPM", String.format(Locale.US, "%.0f", currentRPM));
+        telemetry.addData("Target RPM", String.format(Locale.US, "%.0f", targetRPM));
 
         if (currentTargetVelocity > 0) {
             double error = Math.abs(currentTargetVelocity - currentVelocity);
             double errorPercent = (error / currentTargetVelocity) * 100.0;
-            telemetry.addData("Velocity Error", "%.1f%%", errorPercent);
+            telemetry.addData("Velocity Error", String.format(Locale.US, "%.1f%%", errorPercent));
             telemetry.addData("Ready", shooterVelocityReached ? "YES" : "NO");
         }
     }
@@ -482,14 +430,17 @@ public class BlueAutov3 extends OpMode {
             // ===== Drive to Shoot Position 1 =====
             case 0:
                 follower.followPath(path1_toShoot1, true);
+                // Start shooter while driving to allow motor to reach target RPM
+                updateLimelightTracking();
+                startShooter(1);
                 setPathState(1);
                 break;
 
             // ===== Score at Position 1 (3 balls) =====
             case 1:
                 if (!follower.isBusy()) {
+                    // Shooter already spinning - just update tracking and aim
                     updateLimelightTracking();
-                    startShooter(1);  // Start shooter first
                     aimTurretWithTracking();
                     ballsShot = 0;
                     setPathState(2);
@@ -501,16 +452,13 @@ public class BlueAutov3 extends OpMode {
                 if (shooterVelocityReached ||
                         actionTimer.getElapsedTimeSeconds() > MAX_SPINUP_TIME) {
                     startIntake();  // Start intake after shooter is at speed
-                    // Only use pusher after the second ball (ballsShot >= 2)
-                    if (ballsShot >= 2) {
-                        pushSample();
-                    }
+                    pushSample();
                     setPathState(3);
                 }
                 break;
 
             case 3:
-                // Wait for ball to shoot (push time if pusher used, otherwise just wait)
+                // Push complete, retract
                 if (actionTimer.getElapsedTimeSeconds() > PUSH_TIME) {
                     retractPusher();
                     ballsShot++;
@@ -522,10 +470,8 @@ public class BlueAutov3 extends OpMode {
                 // Check if more balls to shoot at this position
                 if (actionTimer.getElapsedTimeSeconds() > RETRACT_TIME) {
                     if (ballsShot < BALLS_PER_POSITION) {
-                        // Only use pusher after the second ball (ballsShot >= 2)
-                        if (ballsShot >= 2) {
-                            pushSample();
-                        }
+                        // Shoot another ball
+                        pushSample();
                         setPathState(3);  // Go back to push completion check
                     } else {
                         // Done shooting, move to next waypoint
@@ -539,7 +485,8 @@ public class BlueAutov3 extends OpMode {
             // ===== Sweep 1: Waypoint 1 -> 2 -> 3 -> Shoot 2 =====
             case 5:
                 if (!follower.isBusy()) {
-                    // Intake already running from shooting
+                    // Ensure intake is running for sweeping
+                    startIntake();
                     follower.followPath(path3_toWaypoint2, true);
                     setPathState(6);
                 }
@@ -555,6 +502,9 @@ public class BlueAutov3 extends OpMode {
             case 7:
                 if (!follower.isBusy()) {
                     follower.followPath(path5_toShoot2, true);
+                    // Start shooter while driving to allow motor to reach target RPM
+                    updateLimelightTracking();
+                    startShooter(2);
                     setPathState(8);
                 }
                 break;
@@ -562,8 +512,8 @@ public class BlueAutov3 extends OpMode {
             // ===== Score at Position 2 (3 balls) =====
             case 8:
                 if (!follower.isBusy()) {
+                    // Shooter already spinning - just update tracking and aim
                     updateLimelightTracking();
-                    startShooter(2);  // Start shooter first
                     aimTurretWithTracking();
                     ballsShot = 0;
                     setPathState(9);
@@ -574,10 +524,7 @@ public class BlueAutov3 extends OpMode {
                 if (shooterVelocityReached ||
                         actionTimer.getElapsedTimeSeconds() > MAX_SPINUP_TIME) {
                     startIntake();  // Start intake after shooter is at speed
-                    // Only use pusher after the second ball (ballsShot >= 2)
-                    if (ballsShot >= 2) {
-                        pushSample();
-                    }
+                    pushSample();
                     setPathState(10);
                 }
                 break;
@@ -593,10 +540,7 @@ public class BlueAutov3 extends OpMode {
             case 11:
                 if (actionTimer.getElapsedTimeSeconds() > RETRACT_TIME) {
                     if (ballsShot < BALLS_PER_POSITION) {
-                        // Only use pusher after the second ball (ballsShot >= 2)
-                        if (ballsShot >= 2) {
-                            pushSample();
-                        }
+                        pushSample();
                         setPathState(10);
                     } else {
                         stopShooter();
@@ -609,6 +553,8 @@ public class BlueAutov3 extends OpMode {
             // ===== Sweep 2: Waypoint 4 -> 5 -> 6 -> Shoot 3 =====
             case 12:
                 if (!follower.isBusy()) {
+                    // Ensure intake is running for sweeping
+                    startIntake();
                     follower.followPath(path7_toWaypoint5, true);
                     setPathState(13);
                 }
@@ -624,6 +570,9 @@ public class BlueAutov3 extends OpMode {
             case 14:
                 if (!follower.isBusy()) {
                     follower.followPath(path9_toShoot3, true);
+                    // Start shooter while driving to allow motor to reach target RPM
+                    updateLimelightTracking();
+                    startShooter(3);
                     setPathState(15);
                 }
                 break;
@@ -631,8 +580,8 @@ public class BlueAutov3 extends OpMode {
             // ===== Score at Position 3 (3 balls) =====
             case 15:
                 if (!follower.isBusy()) {
+                    // Shooter already spinning - just update tracking and aim
                     updateLimelightTracking();
-                    startShooter(3);  // Start shooter first
                     aimTurretWithTracking();
                     ballsShot = 0;
                     setPathState(16);
@@ -643,10 +592,7 @@ public class BlueAutov3 extends OpMode {
                 if (shooterVelocityReached ||
                         actionTimer.getElapsedTimeSeconds() > MAX_SPINUP_TIME) {
                     startIntake();  // Start intake after shooter is at speed
-                    // Only use pusher after the second ball (ballsShot >= 2)
-                    if (ballsShot >= 2) {
-                        pushSample();
-                    }
+                    pushSample();
                     setPathState(17);
                 }
                 break;
@@ -662,10 +608,7 @@ public class BlueAutov3 extends OpMode {
             case 18:
                 if (actionTimer.getElapsedTimeSeconds() > RETRACT_TIME) {
                     if (ballsShot < BALLS_PER_POSITION) {
-                        // Only use pusher after the second ball (ballsShot >= 2)
-                        if (ballsShot >= 2) {
-                            pushSample();
-                        }
+                        pushSample();
                         setPathState(17);
                     } else {
                         stopShooter();
@@ -678,6 +621,8 @@ public class BlueAutov3 extends OpMode {
             // ===== Sweep 3: Waypoint 7 -> 8 -> Shoot 4 =====
             case 19:
                 if (!follower.isBusy()) {
+                    // Ensure intake is running for sweeping
+                    startIntake();
                     follower.followPath(path11_toWaypoint8, true);
                     setPathState(20);
                 }
@@ -686,6 +631,9 @@ public class BlueAutov3 extends OpMode {
             case 20:
                 if (!follower.isBusy()) {
                     follower.followPath(path12_toShoot4, true);
+                    // Start shooter while driving to allow motor to reach target RPM
+                    updateLimelightTracking();
+                    startShooter(4);
                     setPathState(21);
                 }
                 break;
@@ -693,8 +641,8 @@ public class BlueAutov3 extends OpMode {
             // ===== Score at Position 4 (3 balls) =====
             case 21:
                 if (!follower.isBusy()) {
+                    // Shooter already spinning - just update tracking and aim
                     updateLimelightTracking();
-                    startShooter(4);  // Start shooter first
                     aimTurretWithTracking();
                     ballsShot = 0;
                     setPathState(22);
@@ -705,10 +653,7 @@ public class BlueAutov3 extends OpMode {
                 if (shooterVelocityReached ||
                         actionTimer.getElapsedTimeSeconds() > MAX_SPINUP_TIME) {
                     startIntake();  // Start intake after shooter is at speed
-                    // Only use pusher after the second ball (ballsShot >= 2)
-                    if (ballsShot >= 2) {
-                        pushSample();
-                    }
+                    pushSample();
                     setPathState(23);
                 }
                 break;
@@ -724,10 +669,7 @@ public class BlueAutov3 extends OpMode {
             case 24:
                 if (actionTimer.getElapsedTimeSeconds() > RETRACT_TIME) {
                     if (ballsShot < BALLS_PER_POSITION) {
-                        // Only use pusher after the second ball (ballsShot >= 2)
-                        if (ballsShot >= 2) {
-                            pushSample();
-                        }
+                        pushSample();
                         setPathState(23);
                     } else {
                         // All done!
@@ -765,18 +707,18 @@ public class BlueAutov3 extends OpMode {
         frontIntake.setDirection(DcMotorSimple.Direction.FORWARD);
         frontIntake.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
 
-        // Initialize shooter motor with velocity control
+        // Initialize shooter motor with direct power control (PIDF disabled)
         shooter = hardwareMap.get(DcMotorEx.class, "shooter");
         shooter.setDirection(DcMotorSimple.Direction.FORWARD);
         shooter.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.FLOAT);
         shooter.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
-        shooter.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+        shooter.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);  // Direct power control
 
-        // Set PIDF coefficients
-        PIDFCoefficients pidfCoefficients = new PIDFCoefficients(
-                SHOOTER_KP, SHOOTER_KI, SHOOTER_KD, SHOOTER_KF
-        );
-        shooter.setPIDFCoefficients(DcMotor.RunMode.RUN_USING_ENCODER, pidfCoefficients);
+        // PIDF disabled - using direct power control
+        // PIDFCoefficients pidfCoefficients = new PIDFCoefficients(
+        //         SHOOTER_KP, SHOOTER_KI, SHOOTER_KD, SHOOTER_KF
+        // );
+        // shooter.setPIDFCoefficients(DcMotor.RunMode.RUN_USING_ENCODER, pidfCoefficients);
 
         // Initialize servos
         turretGear = hardwareMap.get(Servo.class, "turretGear");
@@ -800,23 +742,17 @@ public class BlueAutov3 extends OpMode {
 
         // Display initialization info
         telemetry.addLine("════════════════════════════════");
-        telemetry.addLine("BlueAutov3 - AUTO DISTANCE");
+        telemetry.addLine("RedAutov3 - AUTO DISTANCE");
         telemetry.addLine("════════════════════════════════");
         telemetry.addLine("Localization: Pinpoint ONLY");
         telemetry.addLine("Limelight: Tracking & Power");
         telemetry.addData("Balls per Position", BALLS_PER_POSITION);
-        telemetry.addLine("Shooter spins up before intake");
+        telemetry.addLine("Shooter spins up during drive");
         telemetry.addLine("────────────────────────────────");
-        telemetry.addLine("Distance-Power Table:");
-        for (int i = 0; i < DISTANCE_PRESETS.length; i++) {
-            telemetry.addData("  " + DISTANCE_NAMES[i],
-                    String.format("%.0f%%", POWER_PRESETS[i] * 100));
-        }
-        telemetry.addLine("────────────────────────────────");
-        telemetry.addData("Limelight", limelightConnected ? "Connected" : "NOT FOUND");
-        telemetry.addData("Fallback Power", "%.0f%%", FALLBACK_SHOOTER_POWER * 100);
-        telemetry.addData("Battery", "%.2fV",
-                hardwareMap.voltageSensor.iterator().next().getVoltage());
+        telemetry.addData("Shooter Power", String.format(Locale.US, "%.0f%%", SHOOTER_POWER * 100));
+        telemetry.addData("Limelight", limelightConnected ? "Connected (turret only)" : "NOT FOUND");
+        telemetry.addData("Battery", String.format(Locale.US, "%.2fV",
+                hardwareMap.voltageSensor.iterator().next().getVoltage()));
         telemetry.addLine("────────────────────────────────");
         telemetry.addLine("Ready to Start");
         telemetry.update();
@@ -841,13 +777,13 @@ public class BlueAutov3 extends OpMode {
 
         // Telemetry - Robot State
         telemetry.addData("Path State", pathState);
-        telemetry.addData("Opmode Time", "%.1f s", opmodeTimer.getElapsedTimeSeconds());
+        telemetry.addData("Opmode Time", String.format(Locale.US, "%.1f s", opmodeTimer.getElapsedTimeSeconds()));
 
         // Telemetry - Pinpoint Position (ONLY localization source)
         telemetry.addLine("─── PINPOINT POSITION ───");
-        telemetry.addData("X", "%.1f in", follower.getPose().getX());
-        telemetry.addData("Y", "%.1f in", follower.getPose().getY());
-        telemetry.addData("Heading", "%.1f deg", Math.toDegrees(follower.getPose().getHeading()));
+        telemetry.addData("X", String.format(Locale.US, "%.1f in", follower.getPose().getX()));
+        telemetry.addData("Y", String.format(Locale.US, "%.1f in", follower.getPose().getY()));
+        telemetry.addData("Heading", String.format(Locale.US, "%.1f deg", Math.toDegrees(follower.getPose().getHeading())));
 
         // Telemetry - Shooter
         addShooterTelemetry();
