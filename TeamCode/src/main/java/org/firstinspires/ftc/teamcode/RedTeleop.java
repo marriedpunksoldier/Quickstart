@@ -6,20 +6,23 @@ import com.pedropathing.util.Timer;
 import com.qualcomm.hardware.limelightvision.LLResult;
 import com.qualcomm.hardware.limelightvision.LLResultTypes;
 import com.qualcomm.hardware.limelightvision.Limelight3A;
+import com.qualcomm.robotcore.eventloop.opmode.Disabled;
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
-import com.qualcomm.robotcore.hardware.PIDFCoefficients;
+// import com.qualcomm.robotcore.hardware.PIDFCoefficients;  // Removed - using direct power control
 import com.qualcomm.robotcore.hardware.Servo;
 
 import org.firstinspires.ftc.robotcore.external.navigation.Pose3D;
 import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 
 import java.util.List;
+import java.util.Locale;
 
 @TeleOp(name = "Red Teleop", group = "Teleop")
+@Disabled
 public class RedTeleop extends OpMode {
 
     // ═══════════════════════════════════════════════════════════════════
@@ -28,7 +31,7 @@ public class RedTeleop extends OpMode {
     // Distances in inches
     private static final double[] DISTANCE_PRESETS = {24.0, 36.0, 48.0, 60.0, 72.0, 84.0};
     // Corresponding power levels (0.0 - 1.0)
-    private static final double[] POWER_PRESETS =    {0.71, 0.77, 0.83, 0.89, 0.95, 1.0};
+    private static final double[] POWER_PRESETS =    {.60, 0.65, 0.70, 0.75, 0.85, 0.90};
     // Distance preset names for display
     private static final String[] DISTANCE_NAMES = {"2 ft", "3 ft", "4 ft", "5 ft", "6 ft", "7 ft"};
 
@@ -79,13 +82,13 @@ public class RedTeleop extends OpMode {
     private static final double MOTOR_MAX_RPM = 6000.0;
     private static final double TICKS_PER_SECOND_AT_MAX_RPM = (MOTOR_MAX_RPM / 60.0) * MOTOR_TICKS_PER_REV;
 
-    // PIDF coefficients (from testing)
-    private static final double SHOOTER_KP = 10.0;
-    private static final double SHOOTER_KI = 0.100;
-    private static final double SHOOTER_KD = 0.1;
-    private static final double SHOOTER_KF = 12.0;
+    // PIDF coefficients - DISABLED for direct power control
+    // private static final double SHOOTER_KP = 10.0;
+    // private static final double SHOOTER_KI = 0.100;
+    // private static final double SHOOTER_KD = 0.1;
+    // private static final double SHOOTER_KF = 12.0;
 
-    // Velocity verification
+    // Velocity verification (still used for telemetry)
     private static final double VELOCITY_TOLERANCE_PERCENT = 2.0;
 
     // ═══════════════════════════════════════════════════════════════════
@@ -134,18 +137,18 @@ public class RedTeleop extends OpMode {
         frontIntake.setDirection(DcMotorSimple.Direction.FORWARD);
         frontIntake.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
 
-        // Initialize shooter motor with velocity control
+        // Initialize shooter motor with direct power control (PIDF disabled)
         shooter = hardwareMap.get(DcMotorEx.class, "shooter");
         shooter.setDirection(DcMotorSimple.Direction.FORWARD);
         shooter.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.FLOAT);
         shooter.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
-        shooter.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+        shooter.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);  // Direct power control
 
-        // Set PIDF coefficients
-        PIDFCoefficients pidfCoefficients = new PIDFCoefficients(
-                SHOOTER_KP, SHOOTER_KI, SHOOTER_KD, SHOOTER_KF
-        );
-        shooter.setPIDFCoefficients(DcMotor.RunMode.RUN_USING_ENCODER, pidfCoefficients);
+        // PIDF disabled - using direct power control
+        // PIDFCoefficients pidfCoefficients = new PIDFCoefficients(
+        //         SHOOTER_KP, SHOOTER_KI, SHOOTER_KD, SHOOTER_KF
+        // );
+        // shooter.setPIDFCoefficients(DcMotor.RunMode.RUN_USING_ENCODER, pidfCoefficients);
 
         // Initialize servos
         turretGear = hardwareMap.get(Servo.class, "turretGear");
@@ -171,7 +174,7 @@ public class RedTeleop extends OpMode {
         telemetry.addLine("Distance-Power Table:");
         for (int i = 0; i < DISTANCE_PRESETS.length; i++) {
             telemetry.addData("  " + DISTANCE_NAMES[i],
-                    String.format("%.0f%% power", POWER_PRESETS[i] * 100));
+                    String.format(Locale.US, "%.0f%% power", POWER_PRESETS[i] * 100));
         }
         telemetry.addLine("────────────────────────────────");
         telemetry.addData("Limelight", limelightConnected ? "Connected" : "NOT FOUND");
@@ -400,20 +403,21 @@ public class RedTeleop extends OpMode {
             powerLevel = POWER_PRESETS[currentDistanceIndex];
         }
 
-        currentTargetVelocity = powerLevel * TICKS_PER_SECOND_AT_MAX_RPM;
-        shooter.setVelocity(currentTargetVelocity);
+        // Direct power control (PIDF disabled)
+        currentTargetVelocity = powerLevel * TICKS_PER_SECOND_AT_MAX_RPM;  // Keep for telemetry
+        shooter.setPower(powerLevel);
         shooterRunning = true;
         shooterVelocityReached = false;
     }
 
     private void updateShooterVelocityForAuto() {
-        // Update velocity based on current Limelight distance
+        // Update power based on current Limelight distance
         if (limelightHasTarget && autoPowerLevel > 0) {
             double newTargetVelocity = autoPowerLevel * TICKS_PER_SECOND_AT_MAX_RPM;
             // Only update if significantly different (>2% change)
             if (Math.abs(newTargetVelocity - currentTargetVelocity) / currentTargetVelocity > 0.02) {
                 currentTargetVelocity = newTargetVelocity;
-                shooter.setVelocity(currentTargetVelocity);
+                shooter.setPower(autoPowerLevel);  // Direct power control
             }
         }
     }
@@ -546,8 +550,8 @@ public class RedTeleop extends OpMode {
         if (autoDistanceMode) {
             // Show Limelight auto-distance info
             if (limelightHasTarget) {
-                telemetry.addData("Detected Distance", String.format("%.1f\"", limelightDistance));
-                telemetry.addData("Auto Power", String.format("%.0f%%", autoPowerLevel * 100));
+                telemetry.addData("Detected Distance", String.format(Locale.US, "%.1f\"", limelightDistance));
+                telemetry.addData("Auto Power", String.format(Locale.US, "%.0f%%", autoPowerLevel * 100));
             } else {
                 telemetry.addData("Target", "NOT DETECTED");
                 telemetry.addLine("  (Using last known or manual)");
@@ -556,7 +560,7 @@ public class RedTeleop extends OpMode {
             // Show manual preset selection
             telemetry.addData("Selected", DISTANCE_NAMES[currentDistanceIndex] +
                     " (" + (int)DISTANCE_PRESETS[currentDistanceIndex] + "\")");
-            telemetry.addData("Power Level", String.format("%.0f%%", POWER_PRESETS[currentDistanceIndex] * 100));
+            telemetry.addData("Power Level", String.format(Locale.US, "%.0f%%", POWER_PRESETS[currentDistanceIndex] * 100));
         }
 
         // Distance-Power Table (compact)
@@ -564,7 +568,7 @@ public class RedTeleop extends OpMode {
         StringBuilder tableStr = new StringBuilder();
         for (int i = 0; i < DISTANCE_PRESETS.length; i++) {
             String marker = (!autoDistanceMode && i == currentDistanceIndex) ? ">" : " ";
-            tableStr.append(String.format("%s%.0f\":%.0f%% ",
+            tableStr.append(String.format(Locale.US, "%s%.0f\":%.0f%% ",
                     marker, DISTANCE_PRESETS[i], POWER_PRESETS[i] * 100));
             if (i == 2) tableStr.append("\n");
         }
@@ -578,8 +582,8 @@ public class RedTeleop extends OpMode {
 
         telemetry.addData("Shooter", shooterRunning ? "SPINNING" : "OFF");
         if (shooterRunning) {
-            telemetry.addData("Current RPM", String.format("%.0f", currentRPM));
-            telemetry.addData("Target RPM", String.format("%.0f", targetRPM));
+            telemetry.addData("Current RPM", String.format(Locale.US, "%.0f", currentRPM));
+            telemetry.addData("Target RPM", String.format(Locale.US, "%.0f", targetRPM));
             telemetry.addData("Ready to Fire", shooterVelocityReached ? "YES" : "NO");
         }
 
@@ -589,11 +593,11 @@ public class RedTeleop extends OpMode {
                 (frontIntake.getPower() < 0 ? "REVERSE" : "OFF"));
 
         // Turret with lock-on and tracking info
-        String turretStatus = String.format("%.2f", turretPosition);
+        String turretStatus = String.format(Locale.US, "%.2f", turretPosition);
         if (autoDistanceMode) {
             if (turretLockedOn) {
                 if (limelightHasTarget) {
-                    turretStatus += String.format(" [LOCKED tx:%.1f°]", limelightTx);
+                    turretStatus += String.format(Locale.US, " [LOCKED tx:%.1f°]", limelightTx);
                 } else {
                     turretStatus += " [LOCKED - searching]";
                 }
@@ -644,7 +648,7 @@ public class RedTeleop extends OpMode {
 
         Pose3D botpose = result.getBotpose();
         if (botpose != null) {
-            telemetry.addData("Bot Pose", String.format("X:%.1f Y:%.1f",
+            telemetry.addData("Bot Pose", String.format(Locale.US, "X:%.1f Y:%.1f",
                     botpose.getPosition().x * 39.3701,
                     botpose.getPosition().y * 39.3701));
         }

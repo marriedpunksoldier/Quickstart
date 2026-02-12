@@ -1,8 +1,10 @@
 package org.firstinspires.ftc.teamcode;
 
 import com.bylazar.configurables.annotations.Configurable;
+import com.qualcomm.robotcore.eventloop.opmode.Disabled;
 
 @Configurable
+@Disabled
 public class LL_Turret_Config {
     // Limelight
     public static int LL_PIPELINE = 5;                 // AprilTag pipeline index

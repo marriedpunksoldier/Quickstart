@@ -1,5 +1,6 @@
 package org.firstinspires.ftc.teamcode.mechanisms;
 
+import com.qualcomm.robotcore.eventloop.opmode.Disabled;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.DcMotor;
@@ -7,6 +8,8 @@ import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.PIDFCoefficients;
 import com.qualcomm.robotcore.hardware.Servo;
 import com.qualcomm.robotcore.util.ElapsedTime;
+
+import java.util.Locale;
 
 /**
  * FTC Flywheel Shooter Testing System
@@ -39,7 +42,8 @@ import com.qualcomm.robotcore.util.ElapsedTime;
  *   - B + D-pad Up/Down: Adjust kD
  *   - B + Left/Right Bumper: Adjust kF
  */
-@TeleOp(name = "Flywheel Shooter Test", group = "Testing")
+@TeleOp(name = "Flywheel Shooter Test", group = "Test")
+@Disabled
 public class FlywheelShooterTest extends LinearOpMode {
     
     // Hardware
@@ -86,10 +90,11 @@ public class FlywheelShooterTest extends LinearOpMode {
     private final int MENU_ITEMS = 2; // Distance and Power selection
     
     // PIDF coefficients - starting values (will need tuning)
+    // Note: kF = 32767 / max_ticks_per_sec is a starting point
     private double kP = 10.0;
     private double kI = 0.1;
     private double kD = 0.1;
-    private double kF = 12.0; // Start with feedforward based on motor characteristics
+    private double kF = 8.0; // Lowered from 12.0 to reduce output saturation
     
     // PIDF adjustment increments
     private static final double KP_INCREMENT = 0.5;
@@ -171,7 +176,9 @@ public class FlywheelShooterTest extends LinearOpMode {
         // Configure flywheel motor
         shooter = hardwareMap.get(DcMotorEx.class, "shooter");
         shooter.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
-        shooter.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+        // TEMPORARILY using RUN_WITHOUT_ENCODER for direct power control testing
+        shooter.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
+        // shooter.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
         shooter.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.FLOAT);
 
         // Configure pusher servo
@@ -179,8 +186,8 @@ public class FlywheelShooterTest extends LinearOpMode {
         pusherServo.setPosition(PUSHER_RETRACTED);
         pusherExtended = false;
 
-        // Set initial PIDF coefficients
-        setPIDFCoefficients();
+        // TEMPORARILY disabled PIDF for direct power testing
+        // setPIDFCoefficients();
     }
     
     /**
@@ -409,13 +416,17 @@ public class FlywheelShooterTest extends LinearOpMode {
      */
     private void updateMotor() {
         double powerLevel = POWER_LEVELS[currentPowerIndex];
-        double targetVelocity = powerLevel * TICKS_PER_SECOND_AT_MAX_RPM;
+        // double targetVelocity = powerLevel * TICKS_PER_SECOND_AT_MAX_RPM;
 
-        if (powerLevel > 0) {
-            shooter.setVelocity(targetVelocity);
-        } else {
-            shooter.setPower(0);
-        }
+        // TEMPORARILY using direct power control instead of velocity control
+        shooter.setPower(powerLevel);
+
+        // Original velocity control (commented out for testing):
+        // if (powerLevel > 0) {
+        //     shooter.setVelocity(targetVelocity);
+        // } else {
+        //     shooter.setPower(0);
+        // }
     }
 
     /**
@@ -461,7 +472,7 @@ public class FlywheelShooterTest extends LinearOpMode {
                 telemetry.addData("  " + (menuSelection == 0 ? "► " : "  ") + "Distance", 
                     DISTANCE_PRESETS[currentDistanceIndex] + " inches");
                 telemetry.addData("  " + (menuSelection == 1 ? "► " : "  ") + "Power", 
-                    String.format("%.0f%%", POWER_LEVELS[currentPowerIndex] * 100));
+                    String.format(Locale.US, "%.0f%%", POWER_LEVELS[currentPowerIndex] * 100));
                 telemetry.addLine("\nControls:");
                 telemetry.addLine("  D-pad Up/Down: Navigate");
                 telemetry.addLine("  A: Select Item");
@@ -470,12 +481,12 @@ public class FlywheelShooterTest extends LinearOpMode {
             case AUTOMATIC:
                 telemetry.addData("\nAuto Status", autoPaused ? "PAUSED" : "RUNNING");
                 telemetry.addData("Progress", 
-                    String.format("%d/%d combinations", 
+                    String.format(Locale.US, "%d/%d combinations", 
                     autoDistanceIndex * POWER_LEVELS.length + autoPowerIndex + 1,
                     DISTANCE_PRESETS.length * POWER_LEVELS.length));
                 if (!autoPaused) {
                     telemetry.addData("Next advance in", 
-                        String.format("%.1fs", AUTO_ADVANCE_DELAY - autoModeTimer.seconds()));
+                        String.format(Locale.US, "%.1fs", AUTO_ADVANCE_DELAY - autoModeTimer.seconds()));
                 }
                 telemetry.addLine("\nControls:");
                 telemetry.addLine("  A: Advance Now");
@@ -489,7 +500,7 @@ public class FlywheelShooterTest extends LinearOpMode {
         telemetry.addLine("CURRENT TEST PARAMETERS");
         telemetry.addLine("───────────────────────────────────────");
         telemetry.addData("Distance Preset", DISTANCE_PRESETS[currentDistanceIndex] + " inches");
-        telemetry.addData("Power Level", String.format("%.0f%%", POWER_LEVELS[currentPowerIndex] * 100));
+        telemetry.addData("Target Power Level", String.format(Locale.US, "%.0f%%", POWER_LEVELS[currentPowerIndex] * 100));
         
         // Motor performance data
         telemetry.addLine("\n───────────────────────────────────────");
@@ -503,33 +514,33 @@ public class FlywheelShooterTest extends LinearOpMode {
         double velocityError = targetVelocity - currentVelocity;
         double errorPercent = targetVelocity > 0 ? (velocityError / targetVelocity) * 100 : 0;
         
-        telemetry.addData("Current Velocity", String.format("%.0f ticks/sec", currentVelocity));
-        telemetry.addData("Target Velocity", String.format("%.0f ticks/sec", targetVelocity));
-        telemetry.addData("Current RPM", String.format("%.0f RPM", currentRPM));
-        telemetry.addData("Target RPM", String.format("%.0f RPM", targetRPM));
-        telemetry.addData("Velocity Error", String.format("%.0f ticks/sec (%.1f%%)", velocityError, errorPercent));
-        telemetry.addData("Motor Power", String.format("%.2f", shooter.getPower()));
+        telemetry.addData("Current Velocity", String.format(Locale.US, "%.0f ticks/sec", currentVelocity));
+        telemetry.addData("Target Velocity", String.format(Locale.US, "%.0f ticks/sec", targetVelocity));
+        telemetry.addData("Current RPM", String.format(Locale.US, "%.0f RPM", currentRPM));
+        telemetry.addData("Target RPM", String.format(Locale.US, "%.0f RPM", targetRPM));
+        telemetry.addData("Velocity Error", String.format(Locale.US, "%.0f ticks/sec (%.1f%%)", velocityError, errorPercent));
+        telemetry.addData("Actual Motor PWM", String.format(Locale.US, "%.2f", shooter.getPower()));
 
         // Pusher status
         telemetry.addLine("\n───────────────────────────────────────");
         telemetry.addLine("PUSHER SERVO");
         telemetry.addLine("───────────────────────────────────────");
         telemetry.addData("Pusher State", pusherExtended ? "EXTENDED" : "RETRACTED");
-        telemetry.addData("Pusher Position", String.format("%.2f", pusherServo.getPosition()));
+        telemetry.addData("Pusher Position", String.format(Locale.US, "%.2f", pusherServo.getPosition()));
         telemetry.addLine("  Right Trigger: Push Sample");
 
         // PIDF coefficients
         telemetry.addLine("\n───────────────────────────────────────");
         telemetry.addLine("PIDF COEFFICIENTS");
         telemetry.addLine("───────────────────────────────────────");
-        telemetry.addData("kP", String.format("%.2f  (Y + D-pad)", kP));
-        telemetry.addData("kI", String.format("%.3f  (Y + Bumpers)", kI));
-        telemetry.addData("kD", String.format("%.2f  (B + D-pad)", kD));
-        telemetry.addData("kF", String.format("%.2f  (B + Bumpers)", kF));
+        telemetry.addData("kP", String.format(Locale.US, "%.2f  (Y + D-pad)", kP));
+        telemetry.addData("kI", String.format(Locale.US, "%.3f  (Y + Bumpers)", kI));
+        telemetry.addData("kD", String.format(Locale.US, "%.2f  (B + D-pad)", kD));
+        telemetry.addData("kF", String.format(Locale.US, "%.2f  (B + Bumpers)", kF));
         
         // System information
         telemetry.addLine("\n───────────────────────────────────────");
-        telemetry.addData("Runtime", String.format("%.1f seconds", runtime.seconds()));
+        telemetry.addData("Runtime", String.format(Locale.US, "%.1f seconds", runtime.seconds()));
         telemetry.addData("Motor", "goBILDA 5203 (6000 RPM)");
     }
 }

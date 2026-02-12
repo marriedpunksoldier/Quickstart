@@ -20,7 +20,7 @@ import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 import java.util.List;
 import java.util.Locale;
 
-@Autonomous(name = "BlueAutov3", group = "Autonomous")
+@Autonomous(name = "BlueAutoLongv3", group = "Autonomous")
 public class BlueAutoLongv3 extends OpMode {
     // Pedro Pathing
     private Follower follower;

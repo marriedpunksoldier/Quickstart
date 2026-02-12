@@ -20,7 +20,7 @@ import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 import java.util.List;
 import java.util.Locale;
 
-@Autonomous(name = "RedAutov3", group = "Autonomous")
+@Autonomous(name = "RedAutoLongv3", group = "Autonomous")
 public class RedAutoLongv3 extends OpMode {
     // Pedro Pathing
     private Follower follower;
@@ -41,7 +41,7 @@ public class RedAutoLongv3 extends OpMode {
     // SHOOTER POWER SETTING
     // ═══════════════════════════════════════════════════════════════════
     // Fixed power level for autonomous (robot shoots from same position)
-    private static final double SHOOTER_POWER = 0.75;
+    private static final double SHOOTER_POWER = 0.70;
 
     // ═══════════════════════════════════════════════════════════════════
     // FLYWHEEL SHOOTER CONFIGURATION
@@ -89,6 +89,7 @@ public class RedAutoLongv3 extends OpMode {
     // Timing constants (in seconds)
     private static final double PUSH_TIME = 0.2;     // Time to wait while pushing a ball
     private static final double RETRACT_TIME = 0.5;  // Time to wait after retracting for balls to move through intake
+    private static final double LIMELIGHT_SETTLE_TIME = 0.5;  // Time to wait at shoot pose for Limelight to detect AprilTag
 
     // Multi-shot configuration
     private static final int BALLS_PER_POSITION = 3;  // Shoot 3 balls at each position
@@ -98,6 +99,9 @@ public class RedAutoLongv3 extends OpMode {
     private boolean shooterVelocityReached = false;
     private int currentShotNumber = 0;
     private int ballsShot = 0;  // Track balls shot at current position
+
+    // Shoot pose arrival flag (for Limelight settle delay)
+    private boolean arrivedAtShootPose = false;
 
     // AprilTag tracking state (for turret aiming only)
     private boolean limelightHasTarget = false;
@@ -117,15 +121,15 @@ public class RedAutoLongv3 extends OpMode {
 
     // Waypoints for sample sweeping
     private final Pose waypoint1Pose = new Pose(102.72158154859966, 35.58484349258651, Math.toRadians(0));
-    private final Pose waypoint2Pose = new Pose(129.2915980230642, 35.34761120263588, Math.toRadians(0));
+    private final Pose waypoint2Pose = new Pose(120.27677100494228, 35.11037891268531, Math.toRadians(0));
     private final Pose waypoint3Pose = new Pose(102.72158154859966, 35.58484349258651, Math.toRadians(0));
 
     private final Pose waypoint4Pose = new Pose(101, 59.30807248764413, Math.toRadians(0));
-    private final Pose waypoint5Pose = new Pose(129, 59.54530477759474, Math.toRadians(0));
+    private final Pose waypoint5Pose = new Pose(119.9851729818781, 59.30807248764417, Math.toRadians(0));
     private final Pose waypoint6Pose = new Pose(101, 59.30807248764413, Math.toRadians(0));
 
     private final Pose waypoint7Pose = new Pose(102.66128500823724, 84.21746293245471, Math.toRadians(0));
-    private final Pose waypoint8Pose = new Pose(128, 83.2685337726524, Math.toRadians(0));
+    private final Pose waypoint8Pose = new Pose(120.17133443163095, 83.2685337726524, Math.toRadians(0));
 
     // ==================== Path Chains ====================
     private PathChain path1_toShoot1;
@@ -439,11 +443,18 @@ public class RedAutoLongv3 extends OpMode {
             // ===== Score at Position 1 (3 balls) =====
             case 1:
                 if (!follower.isBusy()) {
-                    // Shooter already spinning - just update tracking and aim
-                    updateLimelightTracking();
-                    aimTurretWithTracking();
-                    ballsShot = 0;
-                    setPathState(2);
+                    if (!arrivedAtShootPose) {
+                        // Just arrived - reset timer and wait for Limelight to detect AprilTag
+                        arrivedAtShootPose = true;
+                        actionTimer.resetTimer();
+                    } else if (actionTimer.getElapsedTimeSeconds() > LIMELIGHT_SETTLE_TIME) {
+                        // Limelight has had time to detect AprilTag
+                        arrivedAtShootPose = false;
+                        updateLimelightTracking();
+                        aimTurretWithTracking();
+                        ballsShot = 0;
+                        setPathState(2);
+                    }
                 }
                 break;
 
@@ -512,11 +523,16 @@ public class RedAutoLongv3 extends OpMode {
             // ===== Score at Position 2 (3 balls) =====
             case 8:
                 if (!follower.isBusy()) {
-                    // Shooter already spinning - just update tracking and aim
-                    updateLimelightTracking();
-                    aimTurretWithTracking();
-                    ballsShot = 0;
-                    setPathState(9);
+                    if (!arrivedAtShootPose) {
+                        arrivedAtShootPose = true;
+                        actionTimer.resetTimer();
+                    } else if (actionTimer.getElapsedTimeSeconds() > LIMELIGHT_SETTLE_TIME) {
+                        arrivedAtShootPose = false;
+                        updateLimelightTracking();
+                        aimTurretWithTracking();
+                        ballsShot = 0;
+                        setPathState(9);
+                    }
                 }
                 break;
 
@@ -580,11 +596,16 @@ public class RedAutoLongv3 extends OpMode {
             // ===== Score at Position 3 (3 balls) =====
             case 15:
                 if (!follower.isBusy()) {
-                    // Shooter already spinning - just update tracking and aim
-                    updateLimelightTracking();
-                    aimTurretWithTracking();
-                    ballsShot = 0;
-                    setPathState(16);
+                    if (!arrivedAtShootPose) {
+                        arrivedAtShootPose = true;
+                        actionTimer.resetTimer();
+                    } else if (actionTimer.getElapsedTimeSeconds() > LIMELIGHT_SETTLE_TIME) {
+                        arrivedAtShootPose = false;
+                        updateLimelightTracking();
+                        aimTurretWithTracking();
+                        ballsShot = 0;
+                        setPathState(16);
+                    }
                 }
                 break;
 
@@ -641,11 +662,16 @@ public class RedAutoLongv3 extends OpMode {
             // ===== Score at Position 4 (3 balls) =====
             case 21:
                 if (!follower.isBusy()) {
-                    // Shooter already spinning - just update tracking and aim
-                    updateLimelightTracking();
-                    aimTurretWithTracking();
-                    ballsShot = 0;
-                    setPathState(22);
+                    if (!arrivedAtShootPose) {
+                        arrivedAtShootPose = true;
+                        actionTimer.resetTimer();
+                    } else if (actionTimer.getElapsedTimeSeconds() > LIMELIGHT_SETTLE_TIME) {
+                        arrivedAtShootPose = false;
+                        updateLimelightTracking();
+                        aimTurretWithTracking();
+                        ballsShot = 0;
+                        setPathState(22);
+                    }
                 }
                 break;
 
