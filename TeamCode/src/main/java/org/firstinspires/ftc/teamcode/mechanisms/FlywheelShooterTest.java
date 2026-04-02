@@ -5,8 +5,10 @@ import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
+import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.hardware.PIDFCoefficients;
 import com.qualcomm.robotcore.hardware.Servo;
+import com.qualcomm.robotcore.hardware.CRServo;
 import com.qualcomm.robotcore.util.ElapsedTime;
 
 import java.util.Locale;
@@ -48,11 +50,15 @@ public class FlywheelShooterTest extends LinearOpMode {
     
     // Hardware
     private DcMotorEx shooter;
-    private Servo pusherServo;
+    private DcMotor frontIntake;
+    private CRServo pusherServo;
+
+    // Intake power
+    private static final double INTAKE_POWER = 1.0;
 
     // Pusher servo positions
-    private static final double PUSHER_RETRACTED = 0.2;
-    private static final double PUSHER_EXTENDED = 0.5;
+    private static final double PUSHER_FORWARD_POWER = 1.0;
+    private static final double PUSHER_REVERSE_POWER = -1.0;
     private boolean pusherExtended = false;
 
     // Motor specifications for goBILDA 5203 series
@@ -91,16 +97,17 @@ public class FlywheelShooterTest extends LinearOpMode {
     
     // PIDF coefficients - starting values (will need tuning)
     // Note: kF = 32767 / max_ticks_per_sec is a starting point
-    private double kP = 10.0;
-    private double kI = 0.1;
-    private double kD = 0.1;
-    private double kF = 8.0; // Lowered from 12.0 to reduce output saturation
+    private double kP = 8.0;
+    private double kI = 0.000;
+    private double kD = 0.10;
+    private double kF = 17.00; // Lowered from 12.0 to reduce output saturation
     
     // PIDF adjustment increments
     private static final double KP_INCREMENT = 0.5;
     private static final double KI_INCREMENT = 0.05;
     private static final double KD_INCREMENT = 0.1;
     private static final double KF_INCREMENT = 0.5;
+    
     
     // Button state tracking for debouncing
     private boolean lastXButton = false;
@@ -156,8 +163,9 @@ public class FlywheelShooterTest extends LinearOpMode {
             // Update motor based on current settings
             updateMotor();
 
-            // Handle pusher servo
+            // Handle pusher servo and intake
             handlePusher();
+            handleIntake();
 
             // Display telemetry
             displayTelemetry();
@@ -165,8 +173,10 @@ public class FlywheelShooterTest extends LinearOpMode {
             telemetry.update();
         }
         
-        // Stop motor when OpMode ends
+        // Stop all when OpMode ends
         shooter.setPower(0);
+        frontIntake.setPower(0);
+        pusherServo.setPower(0);
     }
     
     /**
@@ -177,13 +187,18 @@ public class FlywheelShooterTest extends LinearOpMode {
         shooter = hardwareMap.get(DcMotorEx.class, "shooter");
         shooter.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
         // TEMPORARILY using RUN_WITHOUT_ENCODER for direct power control testing
-        shooter.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
+        shooter.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
         // shooter.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
         shooter.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.FLOAT);
 
+        // Configure intake motor
+        frontIntake = hardwareMap.get(DcMotor.class, "frontIntake");
+        frontIntake.setDirection(DcMotorSimple.Direction.FORWARD);
+        frontIntake.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+
         // Configure pusher servo
-        pusherServo = hardwareMap.get(Servo.class, "pusherServo");
-        pusherServo.setPosition(PUSHER_RETRACTED);
+        pusherServo = hardwareMap.get(CRServo.class, "pusherServo");
+        pusherServo.setPower(0);
         pusherExtended = false;
 
         // TEMPORARILY disabled PIDF for direct power testing
@@ -436,20 +451,35 @@ public class FlywheelShooterTest extends LinearOpMode {
      */
     private void handlePusher() {
         boolean rightTriggerPressed = gamepad1.right_trigger > 0.5;
+        boolean leftTriggerPressed = gamepad1.left_trigger > 0.5;
 
-        if (rightTriggerPressed && !lastRightTrigger) {
-            // Trigger pressed - extend pusher
-            pusherServo.setPosition(PUSHER_EXTENDED);
+        // Right trigger: Forward, Left trigger: Reverse, Neither: Stop
+        if (rightTriggerPressed) {
+            pusherServo.setPower(PUSHER_FORWARD_POWER);
             pusherExtended = true;
-        } else if (!rightTriggerPressed && lastRightTrigger) {
-            // Trigger released - retract pusher
-            pusherServo.setPosition(PUSHER_RETRACTED);
+        } else if (leftTriggerPressed) {
+            pusherServo.setPower(PUSHER_REVERSE_POWER);
             pusherExtended = false;
+        } else {
+            pusherServo.setPower(0);
         }
-
-        lastRightTrigger = rightTriggerPressed;
     }
-    
+
+    /**
+     * Handle intake motor control (gamepad2)
+     * Left Bumper: Forward
+     * Left Trigger: Reverse
+     */
+    private void handleIntake() {
+        if (gamepad2.left_bumper) {
+            frontIntake.setPower(INTAKE_POWER);
+        } else if (gamepad2.left_trigger > 0.5) {
+            frontIntake.setPower(-INTAKE_POWER);
+        } else {
+            frontIntake.setPower(0);
+        }
+    }
+
     /**
      * Display comprehensive telemetry data
      */
@@ -521,13 +551,16 @@ public class FlywheelShooterTest extends LinearOpMode {
         telemetry.addData("Velocity Error", String.format(Locale.US, "%.0f ticks/sec (%.1f%%)", velocityError, errorPercent));
         telemetry.addData("Actual Motor PWM", String.format(Locale.US, "%.2f", shooter.getPower()));
 
-        // Pusher status
+        // Mechanisms status
         telemetry.addLine("\n───────────────────────────────────────");
-        telemetry.addLine("PUSHER SERVO");
+        telemetry.addLine("MECHANISMS");
         telemetry.addLine("───────────────────────────────────────");
+        telemetry.addData("Intake", frontIntake.getPower() > 0 ? "FORWARD" :
+                (frontIntake.getPower() < 0 ? "REVERSE" : "OFF"));
         telemetry.addData("Pusher State", pusherExtended ? "EXTENDED" : "RETRACTED");
-        telemetry.addData("Pusher Position", String.format(Locale.US, "%.2f", pusherServo.getPosition()));
-        telemetry.addLine("  Right Trigger: Push Sample");
+        telemetry.addData("Pusher Power", String.format(Locale.US, "%.2f", pusherServo.getPower()));
+        telemetry.addLine("  GP1 Right/Left Trigger: Pusher Fwd/Rev");
+        telemetry.addLine("  GP2 Left Bumper/Trigger: Intake Fwd/Rev");
 
         // PIDF coefficients
         telemetry.addLine("\n───────────────────────────────────────");

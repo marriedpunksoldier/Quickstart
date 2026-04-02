@@ -1,4 +1,4 @@
-package org.firstinspires.ftc.teamcode;
+package org.firstinspires.ftc.teamcode.Testing;
 
 import com.pedropathing.follower.Follower;
 import com.pedropathing.geometry.Pose;
@@ -14,6 +14,7 @@ import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
 // import com.qualcomm.robotcore.hardware.PIDFCoefficients;  // Removed - using direct power control
 import com.qualcomm.robotcore.hardware.Servo;
+import com.qualcomm.robotcore.hardware.CRServo;
 
 import org.firstinspires.ftc.robotcore.external.navigation.Pose3D;
 import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
@@ -67,11 +68,16 @@ public class RedTeleop extends OpMode {
     private DcMotor frontIntake;
     private DcMotorEx shooter;
     private Servo turretGear;
-    private Servo pusherServo;
+    private CRServo pusherServo;
 
     // Limelight
     private Limelight3A limelight;
     private boolean limelightConnected = false;
+
+    // Indicator LED
+    private Servo indicator;
+    private static final double INDICATOR_GREEN = 0.500;
+    private static final double INDICATOR_OFF   = 0.000;
 
     // ═══════════════════════════════════════════════════════════════════
     // SHOOTER CONFIGURATION (from BlueAutov3)
@@ -98,8 +104,8 @@ public class RedTeleop extends OpMode {
     private static final double TURRET_CENTER = 0.5;
     private static final double TURRET_MIN = 0.0;
     private static final double TURRET_MAX = 1.0;
-    private static final double PUSHER_RETRACTED = 0.2;
-    private static final double PUSHER_EXTENDED = 0.5;
+    private static final double PUSHER_FORWARD_POWER = 1.0;
+    private static final double PUSHER_REVERSE_POWER = -1.0;
 
     // Limelight settings
     private static final int LIMELIGHT_PIPELINE = 6;
@@ -152,9 +158,9 @@ public class RedTeleop extends OpMode {
 
         // Initialize servos
         turretGear = hardwareMap.get(Servo.class, "turretGear");
-        pusherServo = hardwareMap.get(Servo.class, "pusherServo");
+        pusherServo = hardwareMap.get(CRServo.class, "pusherServo");
         turretGear.setPosition(TURRET_CENTER);
-        pusherServo.setPosition(PUSHER_RETRACTED);
+        pusherServo.setPower(0);
         turretPosition = TURRET_CENTER;
 
         // Initialize Limelight
@@ -166,6 +172,10 @@ public class RedTeleop extends OpMode {
         } catch (Exception e) {
             limelightConnected = false;
         }
+
+        // Initialize indicator LED
+        indicator = hardwareMap.get(Servo.class, "indicator");
+        indicator.setPosition(INDICATOR_OFF);
 
         // Display initialization
         telemetry.addLine("════════════════════════════════");
@@ -196,6 +206,9 @@ public class RedTeleop extends OpMode {
     public void loop() {
         // Update Limelight distance first
         updateLimelightDistance();
+
+        // Update indicator LED: green when AprilTag is detected
+        indicator.setPosition(limelightHasTarget ? INDICATOR_GREEN : INDICATOR_OFF);
 
         // Handle all controls
         handleDrive();
@@ -442,20 +455,21 @@ public class RedTeleop extends OpMode {
     }
 
     // ═══════════════════════════════════════════════════════════════════
-    // PUSHER CONTROL - GAMEPAD 2 (RIGHT TRIGGER)
+    // PUSHER CONTROL - GAMEPAD 2 (TRIGGERS)
     // ═══════════════════════════════════════════════════════════════════
 
     private void handlePusher() {
         boolean rightTrigger = gamepad2.right_trigger > 0.5;
+        boolean leftTrigger = gamepad2.left_trigger > 0.5;
 
-        // Right trigger: Push sample
-        if (rightTrigger && !lastRightTrigger) {
-            pusherServo.setPosition(PUSHER_EXTENDED);
-        } else if (!rightTrigger && lastRightTrigger) {
-            pusherServo.setPosition(PUSHER_RETRACTED);
+        // Right trigger: Forward, Left trigger: Reverse, Neither: Stop
+        if (rightTrigger) {
+            pusherServo.setPower(PUSHER_FORWARD_POWER);
+        } else if (leftTrigger) {
+            pusherServo.setPower(PUSHER_REVERSE_POWER);
+        } else {
+            pusherServo.setPower(0);
         }
-
-        lastRightTrigger = rightTrigger;
     }
 
     // ═══════════════════════════════════════════════════════════════════
@@ -606,7 +620,7 @@ public class RedTeleop extends OpMode {
             }
         }
         telemetry.addData("Turret", turretStatus);
-        telemetry.addData("Pusher", pusherServo.getPosition() > 0.3 ? "EXTENDED" : "RETRACTED");
+        telemetry.addData("Pusher", pusherServo.getPower() > 0 ? "FORWARD" : pusherServo.getPower() < 0 ? "REVERSE" : "STOPPED");
 
         // Limelight Info
         addLimelightTelemetry();
@@ -663,7 +677,8 @@ public class RedTeleop extends OpMode {
         // Stop all mechanisms
         stopShooter();
         frontIntake.setPower(0);
-        pusherServo.setPosition(PUSHER_RETRACTED);
+        pusherServo.setPower(0);
+        indicator.setPosition(INDICATOR_OFF);
 
         // Stop Limelight
         if (limelightConnected) {

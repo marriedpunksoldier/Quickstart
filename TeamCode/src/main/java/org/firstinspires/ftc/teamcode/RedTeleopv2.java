@@ -13,8 +13,9 @@ import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
-// import com.qualcomm.robotcore.hardware.PIDFCoefficients;  // Removed - using direct power control
+import com.qualcomm.robotcore.hardware.PIDFCoefficients;
 import com.qualcomm.robotcore.hardware.Servo;
+import com.qualcomm.robotcore.hardware.CRServo;
 import org.firstinspires.ftc.robotcore.external.navigation.Pose3D;
 import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 
@@ -56,19 +57,19 @@ public class RedTeleopv2 extends OpMode {
     // DISTANCE-POWER LOOKUP TABLE
     // ═══════════════════════════════════════════════════════════════════
     // Distances in inches
-    private static final double[] DISTANCE_PRESETS = {24.0, 36.0, 48.0, 60.0, 72.0, 84.0};
+    private static final double[] DISTANCE_PRESETS = {24.0, 36.0, 48.0, 60.0, 72.0, 84.0, 120.0, 132.0};
     // Corresponding power levels (0.0 - 1.0)
-    private static final double[] POWER_PRESETS =    {.60, 0.65, 0.70, 0.75, 0.85, 0.90};
+    private static final double[] POWER_PRESETS =   {0.50, 0.50, 0.50, 0.55, 0.58, 0.60, 0.70, 0.75};
     // Distance preset names for display
-    private static final String[] DISTANCE_NAMES = {"2 ft", "3 ft", "4 ft", "5 ft", "6 ft", "7 ft"};
+    private static final String[] DISTANCE_NAMES = {"2 ft", "3 ft", "4 ft", "5 ft", "6 ft", "7 ft", "10 ft", "11 ft"};
 
     private int currentDistanceIndex = 0;  // Start at 24"
 
     // ═══════════════════════════════════════════════════════════════════
     // AUTO-MOVE TO DISTANCE (B BUTTON)
     // ═══════════════════════════════════════════════════════════════════
-    private static final double AUTO_MOVE_TARGET_DISTANCE = 36.0;  // inches from AprilTag
-    private static final double AUTO_MOVE_SHOOTER_POWER = 0.70;    // power at target distance
+    private static final double AUTO_MOVE_TARGET_DISTANCE = 55.0;  // inches from AprilTag
+    private static final double AUTO_MOVE_SHOOTER_POWER = 0.50;    // power at target distance
 
     // Auto-move state
     private enum AutoMoveState { IDLE, MOVING, AT_DISTANCE }
@@ -119,7 +120,7 @@ public class RedTeleopv2 extends OpMode {
     // IMPORTANT: Measure and update these values for your specific robot setup!
     private static final double LIMELIGHT_HEIGHT_INCHES = 13.0;       // h1: Camera lens height above floor
     private static final double TARGET_HEIGHT_INCHES = 29.5;          // h2: AprilTag center height above floor
-    private static final double LIMELIGHT_MOUNT_ANGLE_DEGREES = 15;  // a1: Camera angle (0° = horizontal, positive = tilted up)
+    private static final double LIMELIGHT_MOUNT_ANGLE_DEGREES = 27;  // a1: Camera angle (0° = horizontal, positive = tilted up)
 
     // Turret direct angle mapping for goBILDA Super Speed servo at 90° range
     // 90 degrees across full servo range (0.0 to 1.0), so 90 degrees per unit
@@ -139,11 +140,16 @@ public class RedTeleopv2 extends OpMode {
     private DcMotor frontIntake;
     private DcMotorEx shooter;
     private Servo turretGear;
-    private Servo pusherServo;
+    private CRServo pusherServo;
 
     // Limelight
     private Limelight3A limelight;
     private boolean limelightConnected = false;
+
+    // Indicator LED
+    private Servo indicator;
+    private static final double INDICATOR_GREEN = 0.500;
+    private static final double INDICATOR_OFF   = 0.28;
 
     // ═══════════════════════════════════════════════════════════════════
     // SHOOTER CONFIGURATION (from BlueAutov3)
@@ -154,13 +160,13 @@ public class RedTeleopv2 extends OpMode {
     private static final double MOTOR_MAX_RPM = 6000.0;
     private static final double TICKS_PER_SECOND_AT_MAX_RPM = (MOTOR_MAX_RPM / 60.0) * MOTOR_TICKS_PER_REV;
 
-    // PIDF coefficients - DISABLED for direct power control
-    // private static final double SHOOTER_KP = 10.0;
-    // private static final double SHOOTER_KI = 0.100;
-    // private static final double SHOOTER_KD = 0.1;
-    // private static final double SHOOTER_KF = 12.0;
+    // PIDF coefficients for velocity control
+    private static final double SHOOTER_KP = 8.00;
+    private static final double SHOOTER_KI = 0.000;
+    private static final double SHOOTER_KD = 0.10;
+    private static final double SHOOTER_KF = 13.00;
 
-    // Velocity verification (still used for telemetry)
+    // Velocity verification
     private static final double VELOCITY_TOLERANCE_PERCENT = 2.0;
 
     // ═══════════════════════════════════════════════════════════════════
@@ -170,8 +176,8 @@ public class RedTeleopv2 extends OpMode {
     private static final double TURRET_CENTER = 0.5;
     private static final double TURRET_MIN = 0.0;
     private static final double TURRET_MAX = 1.0;
-    private static final double PUSHER_RETRACTED = 0.2;
-    private static final double PUSHER_EXTENDED = 0.5;
+    private static final double PUSHER_FORWARD_POWER = 1.0;
+    private static final double PUSHER_REVERSE_POWER = -1.0;
 
     // Limelight settings
     // Reference: https://docs.limelightvision.io/docs/docs-limelight/apis/ftc-programming
@@ -213,24 +219,24 @@ public class RedTeleopv2 extends OpMode {
         frontIntake.setDirection(DcMotorSimple.Direction.FORWARD);
         frontIntake.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
 
-        // Initialize shooter motor with direct power control (PIDF disabled)
+        // Initialize shooter motor with PIDF velocity control
         shooter = hardwareMap.get(DcMotorEx.class, "shooter");
         shooter.setDirection(DcMotorSimple.Direction.FORWARD);
         shooter.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.FLOAT);
         shooter.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
-        shooter.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);  // Direct power control
+        shooter.setMode(DcMotor.RunMode.RUN_USING_ENCODER);  // PIDF velocity control
 
-        // PIDF disabled - using direct power control
-        // PIDFCoefficients pidfCoefficients = new PIDFCoefficients(
-        //         SHOOTER_KP, SHOOTER_KI, SHOOTER_KD, SHOOTER_KF
-        // );
-        // shooter.setPIDFCoefficients(DcMotor.RunMode.RUN_USING_ENCODER, pidfCoefficients);
+        // Set PIDF coefficients for velocity control
+        PIDFCoefficients pidfCoefficients = new PIDFCoefficients(
+                SHOOTER_KP, SHOOTER_KI, SHOOTER_KD, SHOOTER_KF
+        );
+        shooter.setPIDFCoefficients(DcMotor.RunMode.RUN_USING_ENCODER, pidfCoefficients);
 
         // Initialize servos
         turretGear = hardwareMap.get(Servo.class, "turretGear");
-        pusherServo = hardwareMap.get(Servo.class, "pusherServo");
+        pusherServo = hardwareMap.get(CRServo.class, "pusherServo");
         turretGear.setPosition(TURRET_CENTER);
-        pusherServo.setPosition(PUSHER_RETRACTED);
+        pusherServo.setPower(0);
         turretPosition = TURRET_CENTER;
 
         // Initialize Limelight
@@ -244,6 +250,10 @@ public class RedTeleopv2 extends OpMode {
         } catch (Exception e) {
             limelightConnected = false;
         }
+
+        // Initialize indicator LED
+        indicator = hardwareMap.get(Servo.class, "indicator");
+        indicator.setPosition(INDICATOR_OFF);
 
         // Display initialization
         telemetry.addLine("════════════════════════════════");
@@ -290,6 +300,9 @@ public class RedTeleopv2 extends OpMode {
     public void loop() {
         // Update Limelight distance first
         updateLimelightDistance();
+
+        // Update indicator LED: green when AprilTag is detected
+        indicator.setPosition(limelightHasTarget ? INDICATOR_GREEN : INDICATOR_OFF);
 
         // Handle auto-move (B button) - must run before drive
         handleAutoMove();
@@ -574,7 +587,7 @@ public class RedTeleopv2 extends OpMode {
         follower.followPath(movePath, true);
 
         currentTargetVelocity = AUTO_MOVE_SHOOTER_POWER * TICKS_PER_SECOND_AT_MAX_RPM;
-        shooter.setPower(AUTO_MOVE_SHOOTER_POWER);
+        shooter.setVelocity(currentTargetVelocity);
         shooterRunning = true;
         shooterVelocityReached = false;
 
@@ -665,27 +678,27 @@ public class RedTeleopv2 extends OpMode {
             powerLevel = POWER_PRESETS[currentDistanceIndex];
         }
 
-        // Direct power control (PIDF disabled)
-        currentTargetVelocity = powerLevel * TICKS_PER_SECOND_AT_MAX_RPM;  // Keep for telemetry
-        shooter.setPower(powerLevel);
+        // PIDF velocity control
+        currentTargetVelocity = powerLevel * TICKS_PER_SECOND_AT_MAX_RPM;
+        shooter.setVelocity(currentTargetVelocity);
         shooterRunning = true;
         shooterVelocityReached = false;
     }
 
     private void updateShooterVelocityForAuto() {
-        // Update power based on current Limelight distance
+        // Update velocity based on current Limelight distance
         if (limelightHasTarget && autoPowerLevel > 0) {
             double newTargetVelocity = autoPowerLevel * TICKS_PER_SECOND_AT_MAX_RPM;
             // Only update if significantly different (>2% change)
             if (Math.abs(newTargetVelocity - currentTargetVelocity) / currentTargetVelocity > 0.02) {
                 currentTargetVelocity = newTargetVelocity;
-                shooter.setPower(autoPowerLevel);  // Direct power control
+                shooter.setVelocity(currentTargetVelocity);  // PIDF velocity control
             }
         }
     }
 
     private void stopShooter() {
-        shooter.setPower(0);
+        shooter.setVelocity(0);
         currentTargetVelocity = 0;
         shooterRunning = false;
         shooterVelocityReached = false;
@@ -704,20 +717,21 @@ public class RedTeleopv2 extends OpMode {
     }
 
     // ═══════════════════════════════════════════════════════════════════
-    // PUSHER CONTROL - GAMEPAD 2 (RIGHT TRIGGER)
+    // PUSHER CONTROL - GAMEPAD 2 (TRIGGERS)
     // ═══════════════════════════════════════════════════════════════════
 
     private void handlePusher() {
         boolean rightTrigger = gamepad2.right_trigger > 0.5;
+        boolean leftTrigger = gamepad2.left_trigger > 0.5;
 
-        // Right trigger: Push sample
-        if (rightTrigger && !lastRightTrigger) {
-            pusherServo.setPosition(PUSHER_EXTENDED);
-        } else if (!rightTrigger && lastRightTrigger) {
-            pusherServo.setPosition(PUSHER_RETRACTED);
+        // Right trigger: Forward, Left trigger: Reverse, Neither: Stop
+        if (rightTrigger) {
+            pusherServo.setPower(PUSHER_FORWARD_POWER);
+        } else if (leftTrigger) {
+            pusherServo.setPower(PUSHER_REVERSE_POWER);
+        } else {
+            pusherServo.setPower(0);
         }
-
-        lastRightTrigger = rightTrigger;
     }
 
     // ═══════════════════════════════════════════════════════════════════
@@ -884,7 +898,7 @@ public class RedTeleopv2 extends OpMode {
             }
         }
         telemetry.addData("Turret", turretStatus);
-        telemetry.addData("Pusher", pusherServo.getPosition() > 0.3 ? "EXTENDED" : "RETRACTED");
+        telemetry.addData("Pusher", pusherServo.getPower() > 0 ? "FORWARD" : pusherServo.getPower() < 0 ? "REVERSE" : "STOPPED");
 
         // Limelight Info
         addLimelightTelemetry();
@@ -963,7 +977,8 @@ public class RedTeleopv2 extends OpMode {
         // Stop all mechanisms
         stopShooter();
         frontIntake.setPower(0);
-        pusherServo.setPosition(PUSHER_RETRACTED);
+        pusherServo.setPower(0);
+        indicator.setPosition(INDICATOR_OFF);
 
         // Stop Limelight
         if (limelightConnected) {
