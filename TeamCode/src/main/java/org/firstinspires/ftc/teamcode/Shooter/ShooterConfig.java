@@ -158,7 +158,7 @@ public final class ShooterConfig {
      *
      * Typical range: 0.001 – 0.010
      */
-    public static final double KP_INITIAL = 0.0025;
+    public static final double KP_INITIAL = 0.0030;
 
     // -------------------------------------------------------------------------
     // Live-tuning increment sizes

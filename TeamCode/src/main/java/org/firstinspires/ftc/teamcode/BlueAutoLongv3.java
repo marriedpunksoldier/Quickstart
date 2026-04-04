@@ -13,7 +13,7 @@ import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
-import com.qualcomm.robotcore.hardware.PIDFCoefficients;
+import org.firstinspires.ftc.teamcode.Shooter.ShooterConfig;
 import com.qualcomm.robotcore.hardware.Servo;
 import com.qualcomm.robotcore.hardware.CRServo;
 import org.firstinspires.ftc.robotcore.external.navigation.Pose3D;
@@ -49,7 +49,7 @@ public class BlueAutoLongv3 extends OpMode {
     // Distances in inches
     private static final double[] DISTANCE_PRESETS = {24.0, 36.0, 48.0, 60.0, 72.0, 84.0, 120.0, 132.0};
     // Corresponding power levels (0.0 - 1.0)
-    private static final double[] POWER_PRESETS =   {0.50, 0.50, 0.50, 0.55, 0.58, 0.60, 0.70, 0.75};
+    private static final double[] POWER_PRESETS =   {0.50, 0.50, 0.50, 0.55, 0.58, 0.60, 0.72, 0.75};
     // Fallback power if limelight has no target
     private static final double FALLBACK_SHOOTER_POWER = 0.55;
 
@@ -57,19 +57,7 @@ public class BlueAutoLongv3 extends OpMode {
     // FLYWHEEL SHOOTER CONFIGURATION
     // ═══════════════════════════════════════════════════════════════════
 
-    // Motor specifications (goBILDA 5203 series 1:1 ratio)
-    private static final double MOTOR_TICKS_PER_REV = 28.0;
-    private static final double MOTOR_MAX_RPM = 6000.0;
-    private static final double TICKS_PER_SECOND_AT_MAX_RPM = (MOTOR_MAX_RPM / 60.0) * MOTOR_TICKS_PER_REV;
-
-    // PIDF coefficients for velocity control
-    private static final double SHOOTER_KP = 8.00;
-    private static final double SHOOTER_KI = 0.000;
-    private static final double SHOOTER_KD = 0.10;
-    private static final double SHOOTER_KF = 13.00;
-
-    // Velocity verification settings
-    private static final double VELOCITY_TOLERANCE_PERCENT = 2.0;
+    // KSV shooter control constants sourced from ShooterConfig
     private static final double MAX_SPINUP_TIME = 2.0;
 
     // ═══════════════════════════════════════════════════════════════════
@@ -104,7 +92,7 @@ public class BlueAutoLongv3 extends OpMode {
     private static final int BALLS_PER_POSITION = 3;  // Shoot 3 balls at each position
 
     // Shooter state tracking
-    private double currentTargetVelocity = 0;
+    private double currentTargetRPM = 0;
     private boolean shooterVelocityReached = false;
     private int currentShotNumber = 0;
     private int ballsShot = 0;  // Track balls shot at current position
@@ -233,43 +221,50 @@ public class BlueAutoLongv3 extends OpMode {
 
         double power = limelightHasTarget ? autoPowerLevel : FALLBACK_SHOOTER_POWER;
 
-        // Calculate target velocity (for telemetry)
-        currentTargetVelocity = power * TICKS_PER_SECOND_AT_MAX_RPM;
-
-        // PIDF velocity control
-        shooter.setVelocity(currentTargetVelocity);
+        currentTargetRPM = power * ShooterConfig.MOTOR_FREE_SPEED_RPM;
     }
 
     /**
-     * Updates shooter power based on current limelight distance.
+     * Updates shooter target RPM based on current limelight distance.
      * Call this while shooter is spinning to adjust power dynamically.
      */
     private void updateShooterPower() {
-        if (currentTargetVelocity == 0) return;  // Shooter not running
+        if (currentTargetRPM <= 0) return;  // Shooter not running
 
         double power = limelightHasTarget ? autoPowerLevel : FALLBACK_SHOOTER_POWER;
-        currentTargetVelocity = power * TICKS_PER_SECOND_AT_MAX_RPM;
-        shooter.setVelocity(currentTargetVelocity);
+        currentTargetRPM = power * ShooterConfig.MOTOR_FREE_SPEED_RPM;
     }
 
     /**
-     * Check if shooter has reached target velocity
+     * Applies KSV motor output every loop iteration.
+     * Must be called in every loop/autonomousPathUpdate cycle.
+     */
+    private void updateShooterOutput() {
+        if (currentTargetRPM <= 0) {
+            shooter.setPower(0);
+            return;
+        }
+        double actualRPM = (shooter.getVelocity() / ShooterConfig.TICKS_PER_REV) * 60.0;
+        double feedForward = ShooterConfig.KV_INITIAL * currentTargetRPM + ShooterConfig.KS_INITIAL;
+        double pTerm = ShooterConfig.KP_INITIAL * (currentTargetRPM - actualRPM);
+        shooter.setPower(Math.max(0.0, Math.min(1.0, feedForward + pTerm)));
+    }
+
+    /**
+     * Check if shooter has reached target RPM
      */
     private void updateShooterVelocityStatus() {
-        if (currentTargetVelocity == 0) {
+        if (currentTargetRPM <= 0) {
             shooterVelocityReached = false;
             return;
         }
-
-        double currentVelocity = shooter.getVelocity();
-        double error = Math.abs(currentTargetVelocity - currentVelocity);
-        double errorPercent = (error / currentTargetVelocity) * 100.0;
-        shooterVelocityReached = (errorPercent < VELOCITY_TOLERANCE_PERCENT);
+        double actualRPM = (shooter.getVelocity() / ShooterConfig.TICKS_PER_REV) * 60.0;
+        shooterVelocityReached = Math.abs(currentTargetRPM - actualRPM) <= ShooterConfig.VELOCITY_TOLERANCE_RPM;
     }
 
     private void stopShooter() {
-        shooter.setVelocity(0);
-        currentTargetVelocity = 0;
+        shooter.setPower(0);
+        currentTargetRPM = 0;
         shooterVelocityReached = false;
     }
 
@@ -436,22 +431,19 @@ public class BlueAutoLongv3 extends OpMode {
      * Add detailed shooter telemetry
      */
     private void addShooterTelemetry() {
-        double currentVelocity = shooter.getVelocity();
-        double currentRPM = (currentVelocity / MOTOR_TICKS_PER_REV) * 60.0;
-        double targetRPM = (currentTargetVelocity / MOTOR_TICKS_PER_REV) * 60.0;
+        double actualRPM = (shooter.getVelocity() / ShooterConfig.TICKS_PER_REV) * 60.0;
 
-        telemetry.addLine("─── SHOOTER ───");
+        telemetry.addLine("─── SHOOTER (KSV) ───");
         telemetry.addData("Position", currentShotNumber);
         telemetry.addData("Balls Shot", String.format(Locale.US, "%d / %d", ballsShot, BALLS_PER_POSITION));
         telemetry.addData("Power Level", String.format(Locale.US, "%.0f%% (%s)",
                 autoPowerLevel * 100, limelightHasTarget ? "auto" : "fallback"));
-        telemetry.addData("Current RPM", String.format(Locale.US, "%.0f", currentRPM));
-        telemetry.addData("Target RPM", String.format(Locale.US, "%.0f", targetRPM));
+        telemetry.addData("Actual RPM", String.format(Locale.US, "%.0f", actualRPM));
+        telemetry.addData("Target RPM", String.format(Locale.US, "%.0f", currentTargetRPM));
+        telemetry.addData("Motor Output", String.format(Locale.US, "%.3f", shooter.getPower()));
 
-        if (currentTargetVelocity > 0) {
-            double error = Math.abs(currentTargetVelocity - currentVelocity);
-            double errorPercent = (error / currentTargetVelocity) * 100.0;
-            telemetry.addData("Velocity Error", String.format(Locale.US, "%.1f%%", errorPercent));
+        if (currentTargetRPM > 0) {
+            telemetry.addData("RPM Error", String.format(Locale.US, "%.0f", currentTargetRPM - actualRPM));
             telemetry.addData("Ready", shooterVelocityReached ? "YES" : "NO");
         }
     }
@@ -460,7 +452,8 @@ public class BlueAutoLongv3 extends OpMode {
     // Each shooting position fires 3 balls with intake running throughout
 
     public void autonomousPathUpdate() {
-        // Update shooter velocity status every loop
+        // Update KSV controller and velocity status every loop
+        updateShooterOutput();
         updateShooterVelocityStatus();
 
         switch (pathState) {
@@ -711,18 +704,12 @@ public class BlueAutoLongv3 extends OpMode {
         frontIntake.setDirection(DcMotorSimple.Direction.FORWARD);
         frontIntake.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
 
-        // Initialize shooter motor with PIDF velocity control
-        shooter = hardwareMap.get(DcMotorEx.class, "shooter");
+        // Initialize shooter motor with KSV open-loop control
+        shooter = hardwareMap.get(DcMotorEx.class, ShooterConfig.FLYWHEEL_MOTOR_NAME);
         shooter.setDirection(DcMotorSimple.Direction.FORWARD);
         shooter.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.FLOAT);
         shooter.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
-        shooter.setMode(DcMotor.RunMode.RUN_USING_ENCODER);  // PIDF velocity control
-
-        // Set PIDF coefficients for velocity control
-        PIDFCoefficients pidfCoefficients = new PIDFCoefficients(
-                SHOOTER_KP, SHOOTER_KI, SHOOTER_KD, SHOOTER_KF
-        );
-        shooter.setPIDFCoefficients(DcMotor.RunMode.RUN_USING_ENCODER, pidfCoefficients);
+        shooter.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
 
         // Initialize servos
         turretGear = hardwareMap.get(Servo.class, "turretGear");

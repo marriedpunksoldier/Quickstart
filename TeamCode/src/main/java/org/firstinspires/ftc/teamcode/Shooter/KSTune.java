@@ -1,5 +1,6 @@
 package org.firstinspires.ftc.teamcode.Shooter;
 
+import com.qualcomm.robotcore.eventloop.opmode.Disabled;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.DcMotor;
@@ -48,6 +49,7 @@ import com.qualcomm.robotcore.util.ElapsedTime;
  *   left_bumper → stop motor (reset to 0 power)
  */
 @TeleOp(name = "Shooter — 1. KS Tune  (Static Friction)", group = "Shooter Tuning")
+@Disabled
 public class KSTune extends LinearOpMode {
 
     private DcMotorEx flywheelMotor;

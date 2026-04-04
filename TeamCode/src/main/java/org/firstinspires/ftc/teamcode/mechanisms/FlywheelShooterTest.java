@@ -6,8 +6,8 @@ import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
-import com.qualcomm.robotcore.hardware.PIDFCoefficients;
 import com.qualcomm.robotcore.hardware.Servo;
+import org.firstinspires.ftc.teamcode.Shooter.ShooterConfig;
 import com.qualcomm.robotcore.hardware.CRServo;
 import com.qualcomm.robotcore.util.ElapsedTime;
 
@@ -61,11 +61,6 @@ public class FlywheelShooterTest extends LinearOpMode {
     private static final double PUSHER_REVERSE_POWER = -1.0;
     private boolean pusherExtended = false;
 
-    // Motor specifications for goBILDA 5203 series
-    private static final double MOTOR_MAX_RPM = 6000.0;
-    private static final double MOTOR_TICKS_PER_REV = 28.0; // 28 CPR × 1:1 ratio
-    private static final double TICKS_PER_SECOND_AT_MAX_RPM = (MOTOR_MAX_RPM / 60.0) * MOTOR_TICKS_PER_REV;
-    
     // Distance presets in inches
     private final int[] DISTANCE_PRESETS = {24, 36, 48, 60, 72, 84, 96, 108, 120}; // 2ft, 3ft, 4ft, 5ft, 6ft, 7ft, 8ft, 9ft, 10ft
     
@@ -94,20 +89,6 @@ public class FlywheelShooterTest extends LinearOpMode {
     // Menu mode variables
     private int menuSelection = 0;
     private final int MENU_ITEMS = 2; // Distance and Power selection
-    
-    // PIDF coefficients - starting values (will need tuning)
-    // Note: kF = 32767 / max_ticks_per_sec is a starting point
-    private double kP = 8.0;
-    private double kI = 0.000;
-    private double kD = 0.10;
-    private double kF = 17.00; // Lowered from 12.0 to reduce output saturation
-    
-    // PIDF adjustment increments
-    private static final double KP_INCREMENT = 0.5;
-    private static final double KI_INCREMENT = 0.05;
-    private static final double KD_INCREMENT = 0.1;
-    private static final double KF_INCREMENT = 0.5;
-    
     
     // Button state tracking for debouncing
     private boolean lastXButton = false;
@@ -143,9 +124,6 @@ public class FlywheelShooterTest extends LinearOpMode {
         while (opModeIsActive()) {
             // Handle mode switching
             handleModeSwitch();
-            
-            // Handle PIDF tuning (available in all modes)
-            handlePIDFTuning();
             
             // Process controls based on current mode
             switch (currentMode) {
@@ -186,9 +164,7 @@ public class FlywheelShooterTest extends LinearOpMode {
         // Configure flywheel motor
         shooter = hardwareMap.get(DcMotorEx.class, "shooter");
         shooter.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
-        // TEMPORARILY using RUN_WITHOUT_ENCODER for direct power control testing
-        shooter.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
-        // shooter.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+        shooter.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
         shooter.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.FLOAT);
 
         // Configure intake motor
@@ -201,18 +177,8 @@ public class FlywheelShooterTest extends LinearOpMode {
         pusherServo.setPower(0);
         pusherExtended = false;
 
-        // TEMPORARILY disabled PIDF for direct power testing
-        // setPIDFCoefficients();
     }
-    
-    /**
-     * Update PIDF coefficients on the motor
-     */
-    private void setPIDFCoefficients() {
-        PIDFCoefficients pidfCoefficients = new PIDFCoefficients(kP, kI, kD, kF);
-        shooter.setPIDFCoefficients(DcMotor.RunMode.RUN_USING_ENCODER, pidfCoefficients);
-    }
-    
+
     /**
      * Handle mode switching with X button
      */
@@ -240,58 +206,6 @@ public class FlywheelShooterTest extends LinearOpMode {
         }
         
         lastXButton = xButton;
-    }
-    
-    /**
-     * Handle PIDF coefficient tuning with gamepad
-     */
-    private void handlePIDFTuning() {
-        boolean yButton = gamepad1.y;
-        boolean bButton = gamepad1.b;
-        boolean dpadUp = gamepad1.dpad_up;
-        boolean dpadDown = gamepad1.dpad_down;
-        boolean leftBumper = gamepad1.left_bumper;
-        boolean rightBumper = gamepad1.right_bumper;
-        
-        // Y + D-pad: Adjust kP
-        if (yButton && dpadUp && !lastDpadUp) {
-            kP += KP_INCREMENT;
-            setPIDFCoefficients();
-        }
-        if (yButton && dpadDown && !lastDpadDown) {
-            kP = Math.max(0, kP - KP_INCREMENT);
-            setPIDFCoefficients();
-        }
-        
-        // Y + Bumpers: Adjust kI
-        if (yButton && rightBumper && !lastRightBumper) {
-            kI += KI_INCREMENT;
-            setPIDFCoefficients();
-        }
-        if (yButton && leftBumper && !lastLeftBumper) {
-            kI = Math.max(0, kI - KI_INCREMENT);
-            setPIDFCoefficients();
-        }
-        
-        // B + D-pad: Adjust kD (only if not in automatic mode or paused)
-        if (bButton && dpadUp && !lastDpadUp && (currentMode != ControlMode.AUTOMATIC || autoPaused)) {
-            kD += KD_INCREMENT;
-            setPIDFCoefficients();
-        }
-        if (bButton && dpadDown && !lastDpadDown && (currentMode != ControlMode.AUTOMATIC || autoPaused)) {
-            kD = Math.max(0, kD - KD_INCREMENT);
-            setPIDFCoefficients();
-        }
-        
-        // B + Bumpers: Adjust kF (only if not in automatic mode or paused)
-        if (bButton && rightBumper && !lastRightBumper && (currentMode != ControlMode.AUTOMATIC || autoPaused)) {
-            kF += KF_INCREMENT;
-            setPIDFCoefficients();
-        }
-        if (bButton && leftBumper && !lastLeftBumper && (currentMode != ControlMode.AUTOMATIC || autoPaused)) {
-            kF = Math.max(0, kF - KF_INCREMENT);
-            setPIDFCoefficients();
-        }
     }
     
     /**
@@ -427,21 +341,20 @@ public class FlywheelShooterTest extends LinearOpMode {
     }
     
     /**
-     * Update motor velocity based on current power setting
+     * Update motor output using KSV controller
      */
     private void updateMotor() {
         double powerLevel = POWER_LEVELS[currentPowerIndex];
-        // double targetVelocity = powerLevel * TICKS_PER_SECOND_AT_MAX_RPM;
-
-        // TEMPORARILY using direct power control instead of velocity control
-        shooter.setPower(powerLevel);
-
-        // Original velocity control (commented out for testing):
-        // if (powerLevel > 0) {
-        //     shooter.setVelocity(targetVelocity);
-        // } else {
-        //     shooter.setPower(0);
-        // }
+        if (powerLevel <= 0) {
+            shooter.setPower(0);
+            return;
+        }
+        double targetRPM = powerLevel * ShooterConfig.MOTOR_FREE_SPEED_RPM;
+        double actualRPM = (shooter.getVelocity() / ShooterConfig.TICKS_PER_REV) * 60.0;
+        double feedForward = ShooterConfig.KV_INITIAL * targetRPM + ShooterConfig.KS_INITIAL;
+        double pTerm = ShooterConfig.KP_INITIAL * (targetRPM - actualRPM);
+        double output = Math.max(0.0, Math.min(1.0, feedForward + pTerm));
+        shooter.setPower(output);
     }
 
     /**
@@ -537,19 +450,14 @@ public class FlywheelShooterTest extends LinearOpMode {
         telemetry.addLine("MOTOR PERFORMANCE");
         telemetry.addLine("───────────────────────────────────────");
         
-        double currentVelocity = shooter.getVelocity();
-        double targetVelocity = POWER_LEVELS[currentPowerIndex] * TICKS_PER_SECOND_AT_MAX_RPM;
-        double currentRPM = (currentVelocity / MOTOR_TICKS_PER_REV) * 60.0;
-        double targetRPM = (targetVelocity / MOTOR_TICKS_PER_REV) * 60.0;
-        double velocityError = targetVelocity - currentVelocity;
-        double errorPercent = targetVelocity > 0 ? (velocityError / targetVelocity) * 100 : 0;
-        
-        telemetry.addData("Current Velocity", String.format(Locale.US, "%.0f ticks/sec", currentVelocity));
-        telemetry.addData("Target Velocity", String.format(Locale.US, "%.0f ticks/sec", targetVelocity));
-        telemetry.addData("Current RPM", String.format(Locale.US, "%.0f RPM", currentRPM));
+        double actualRPM = (shooter.getVelocity() / ShooterConfig.TICKS_PER_REV) * 60.0;
+        double targetRPM = POWER_LEVELS[currentPowerIndex] * ShooterConfig.MOTOR_FREE_SPEED_RPM;
+        double rpmError = targetRPM - actualRPM;
+
+        telemetry.addData("Actual RPM", String.format(Locale.US, "%.0f RPM", actualRPM));
         telemetry.addData("Target RPM", String.format(Locale.US, "%.0f RPM", targetRPM));
-        telemetry.addData("Velocity Error", String.format(Locale.US, "%.0f ticks/sec (%.1f%%)", velocityError, errorPercent));
-        telemetry.addData("Actual Motor PWM", String.format(Locale.US, "%.2f", shooter.getPower()));
+        telemetry.addData("RPM Error", String.format(Locale.US, "%.0f RPM", rpmError));
+        telemetry.addData("Motor Output", String.format(Locale.US, "%.3f", shooter.getPower()));
 
         // Mechanisms status
         telemetry.addLine("\n───────────────────────────────────────");
@@ -562,15 +470,14 @@ public class FlywheelShooterTest extends LinearOpMode {
         telemetry.addLine("  GP1 Right/Left Trigger: Pusher Fwd/Rev");
         telemetry.addLine("  GP2 Left Bumper/Trigger: Intake Fwd/Rev");
 
-        // PIDF coefficients
+        // KSV constants
         telemetry.addLine("\n───────────────────────────────────────");
-        telemetry.addLine("PIDF COEFFICIENTS");
+        telemetry.addLine("KSV CONSTANTS");
         telemetry.addLine("───────────────────────────────────────");
-        telemetry.addData("kP", String.format(Locale.US, "%.2f  (Y + D-pad)", kP));
-        telemetry.addData("kI", String.format(Locale.US, "%.3f  (Y + Bumpers)", kI));
-        telemetry.addData("kD", String.format(Locale.US, "%.2f  (B + D-pad)", kD));
-        telemetry.addData("kF", String.format(Locale.US, "%.2f  (B + Bumpers)", kF));
-        
+        telemetry.addData("KS", String.format(Locale.US, "%.4f", ShooterConfig.KS_INITIAL));
+        telemetry.addData("KV", String.format(Locale.US, "%.6f", ShooterConfig.KV_INITIAL));
+        telemetry.addData("KP", String.format(Locale.US, "%.4f", ShooterConfig.KP_INITIAL));
+
         // System information
         telemetry.addLine("\n───────────────────────────────────────");
         telemetry.addData("Runtime", String.format(Locale.US, "%.1f seconds", runtime.seconds()));

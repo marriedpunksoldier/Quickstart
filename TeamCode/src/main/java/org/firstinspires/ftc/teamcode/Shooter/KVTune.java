@@ -1,5 +1,6 @@
 package org.firstinspires.ftc.teamcode.Shooter;
 
+import com.qualcomm.robotcore.eventloop.opmode.Disabled;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.DcMotor;
@@ -63,6 +64,7 @@ import com.qualcomm.robotcore.util.Range;
  *   left_trigger  (>0.2)      → decrease target RPM by RPM_STEP
  */
 @TeleOp(name = "Shooter — 2. KV Tune  (Velocity Feedforward)", group = "Shooter Tuning")
+@Disabled
 public class KVTune extends LinearOpMode {
 
     private DcMotorEx flywheelMotor;
