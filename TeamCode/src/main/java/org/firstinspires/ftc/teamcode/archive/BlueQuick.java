@@ -1,4 +1,4 @@
-package org.firstinspires.ftc.teamcode;
+package org.firstinspires.ftc.teamcode.archive;
 
 import com.pedropathing.follower.Follower;
 import com.pedropathing.geometry.BezierLine;
@@ -9,6 +9,7 @@ import com.qualcomm.hardware.limelightvision.LLResult;
 import com.qualcomm.hardware.limelightvision.LLResultTypes;
 import com.qualcomm.hardware.limelightvision.Limelight3A;
 import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
+import com.qualcomm.robotcore.eventloop.opmode.Disabled;
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
@@ -21,8 +22,9 @@ import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 import java.util.List;
 import java.util.Locale;
 
-@Autonomous(name = "RedAutoLongv3", group = "Autonomous")
-public class RedAutoLongv3 extends OpMode {
+@Autonomous(name = "BlueQuick", group = "Autonomous")
+@Disabled
+public class BlueQuick extends OpMode{
     // Pedro Pathing
     private Follower follower;
     private Timer pathTimer, actionTimer, opmodeTimer;
@@ -30,6 +32,7 @@ public class RedAutoLongv3 extends OpMode {
 
     // Hardware
     private DcMotor frontIntake;
+    private DcMotor rearIntake;
     private DcMotorEx shooter;
     private Servo turretGear;
     private CRServo pusherServo;
@@ -61,7 +64,7 @@ public class RedAutoLongv3 extends OpMode {
     private static final double MAX_SPINUP_TIME = 2.0;
 
     // ═══════════════════════════════════════════════════════════════════
-    // APRILTAG AUTOTRACKING CONFIGURATION (from RedTeleop)
+    // APRILTAG AUTOTRACKING CONFIGURATION
     // ═══════════════════════════════════════════════════════════════════
 
     // Turret servo configuration
@@ -72,10 +75,10 @@ public class RedAutoLongv3 extends OpMode {
     private static final double TURRET_DEGREES_PER_SERVO_UNIT = 90.0;
 
     // Target AprilTag ID (-1 = use any/closest tag)
-    private static final int TARGET_APRILTAG_ID = 24;
+    private static final int TARGET_APRILTAG_ID = 20;
 
     // Limelight settings
-    private static final int LIMELIGHT_PIPELINE = 2;  // Preset for AprilTag detection
+    private static final int LIMELIGHT_PIPELINE = 1;  // Configure this pipeline for AprilTag detection with appropriate camera settings
 
     // ═══════════════════════════════════════════════════════════════════
 
@@ -87,7 +90,6 @@ public class RedAutoLongv3 extends OpMode {
     // Timing constants (in seconds)
     private static final double PUSH_TIME = 0.2;     // Time to wait while pushing a ball
     private static final double RETRACT_TIME = 0.5;  // Time to wait after retracting for balls to move through intake
-    private static final double LIMELIGHT_SETTLE_TIME = 0.5;  // Time to wait at shoot pose for Limelight to detect AprilTag
 
     // Multi-shot configuration
     private static final int BALLS_PER_POSITION = 3;  // Shoot 3 balls at each position
@@ -98,9 +100,6 @@ public class RedAutoLongv3 extends OpMode {
     private int currentShotNumber = 0;
     private int ballsShot = 0;  // Track balls shot at current position
 
-    // Shoot pose arrival flag (for Limelight settle delay)
-    private boolean arrivedAtShootPose = false;
-
     // AprilTag tracking state (for turret aiming and shooter power)
     private boolean limelightHasTarget = false;
     private double limelightDistance = 0;
@@ -110,95 +109,29 @@ public class RedAutoLongv3 extends OpMode {
 
     // ==================== Poses ====================
     // Start position
-    private final Pose startPose = new Pose(88, 8, Math.toRadians(90));
+    private final Pose startPose = new Pose(56, 8, Math.toRadians(90));
 
-    // Shooting positions
-    private final Pose shoot1Pose = new Pose(85.07215815485998, 17.555189456342667, Math.toRadians(65));
-    private final Pose shoot2Pose = new Pose(85.07215815485998, 17.555189456342667, Math.toRadians(65));
-    private final Pose shoot3Pose = new Pose(85.07215815485998, 17.555189456342667, Math.toRadians(65));
+    // Shooting position
+    private final Pose shoot1Pose = new Pose(59.54530477759472, 16.843492586490928, Math.toRadians(115));
 
-    // Waypoints for sample sweeping
-    private final Pose waypoint1Pose = new Pose(102.72158154859966, 35.58484349258651, Math.toRadians(0));
-    private final Pose waypoint2Pose = new Pose(120.27677100494228, 35.11037891268531, Math.toRadians(0));
-    private final Pose waypoint3Pose = new Pose(102.72158154859966, 35.58484349258651, Math.toRadians(0));
-
-    private final Pose waypoint4Pose = new Pose(101, 59.30807248764413, Math.toRadians(0));
-    private final Pose waypoint5Pose = new Pose(119.9851729818781, 59.30807248764417, Math.toRadians(0));
-    private final Pose waypoint6Pose = new Pose(101, 59.30807248764413, Math.toRadians(0));
-
-    private final Pose waypoint7Pose = new Pose(108.07742998352553, 11.426688632619447, Math.toRadians(90));
+    // Waypoint (end position)
+    private final Pose waypoint1Pose = new Pose(38.02800658978585, 13.26688632619441, Math.toRadians(-90));
 
     // ==================== Path Chains ====================
     private PathChain path1_toShoot1;
     private PathChain path2_toWaypoint1;
-    private PathChain path3_toWaypoint2;
-    private PathChain path4_toWaypoint3;
-    private PathChain path5_toShoot2;
-    private PathChain path6_toWaypoint4;
-    private PathChain path7_toWaypoint5;
-    private PathChain path8_toWaypoint6;
-    private PathChain path9_toShoot3;
-    private PathChain path10_toWaypoint7;
 
     public void buildPaths() {
         // Path 1: Start -> Shoot 1
         path1_toShoot1 = follower.pathBuilder()
                 .addPath(new BezierLine(startPose, shoot1Pose))
-                .setLinearHeadingInterpolation(Math.toRadians(90), Math.toRadians(65))
+                .setLinearHeadingInterpolation(Math.toRadians(90), Math.toRadians(115))
                 .build();
 
-        // Path 2: Shoot 1 -> Waypoint 1
+        // Path 2: Shoot 1 -> Waypoint 1 (end position)
         path2_toWaypoint1 = follower.pathBuilder()
                 .addPath(new BezierLine(shoot1Pose, waypoint1Pose))
-                .setLinearHeadingInterpolation(Math.toRadians(65), Math.toRadians(0))
-                .build();
-
-        // Path 3: Waypoint 1 -> Waypoint 2
-        path3_toWaypoint2 = follower.pathBuilder()
-                .addPath(new BezierLine(waypoint1Pose, waypoint2Pose))
-                .setLinearHeadingInterpolation(Math.toRadians(0), Math.toRadians(0))
-                .build();
-
-        // Path 4: Waypoint 2 -> Waypoint 3
-        path4_toWaypoint3 = follower.pathBuilder()
-                .addPath(new BezierLine(waypoint2Pose, waypoint3Pose))
-                .setLinearHeadingInterpolation(Math.toRadians(0), Math.toRadians(0))
-                .build();
-
-        // Path 5: Waypoint 3 -> Shoot 2
-        path5_toShoot2 = follower.pathBuilder()
-                .addPath(new BezierLine(waypoint3Pose, shoot2Pose))
-                .setLinearHeadingInterpolation(Math.toRadians(0), Math.toRadians(65))
-                .build();
-
-        // Path 6: Shoot 2 -> Waypoint 4
-        path6_toWaypoint4 = follower.pathBuilder()
-                .addPath(new BezierLine(shoot2Pose, waypoint4Pose))
-                .setLinearHeadingInterpolation(Math.toRadians(55), Math.toRadians(0))
-                .build();
-
-        // Path 7: Waypoint 4 -> Waypoint 5
-        path7_toWaypoint5 = follower.pathBuilder()
-                .addPath(new BezierLine(waypoint4Pose, waypoint5Pose))
-                .setLinearHeadingInterpolation(Math.toRadians(0), Math.toRadians(0))
-                .build();
-
-        // Path 8: Waypoint 5 -> Waypoint 6
-        path8_toWaypoint6 = follower.pathBuilder()
-                .addPath(new BezierLine(waypoint5Pose, waypoint6Pose))
-                .setLinearHeadingInterpolation(Math.toRadians(0), Math.toRadians(65))
-                .build();
-
-        // Path 9: Waypoint 6 -> Shoot 3
-        path9_toShoot3 = follower.pathBuilder()
-                .addPath(new BezierLine(waypoint6Pose, shoot3Pose))
-                .setLinearHeadingInterpolation(Math.toRadians(65), Math.toRadians(65))
-                .build();
-
-        // Path 10: Shoot 3 -> Waypoint 7
-        path10_toWaypoint7 = follower.pathBuilder()
-                .addPath(new BezierLine(shoot3Pose, waypoint7Pose))
-                .setLinearHeadingInterpolation(Math.toRadians(65), Math.toRadians(90))
+                .setLinearHeadingInterpolation(Math.toRadians(115), Math.toRadians(90))
                 .build();
     }
 
@@ -206,10 +139,12 @@ public class RedAutoLongv3 extends OpMode {
 
     private void startIntake() {
         frontIntake.setPower(INTAKE_POWER);
+        rearIntake.setPower(INTAKE_POWER);
     }
 
     private void stopIntake() {
         frontIntake.setPower(0);
+        rearIntake.setPower(0);
     }
 
     /**
@@ -284,8 +219,6 @@ public class RedAutoLongv3 extends OpMode {
     }
 
     // ==================== Limelight AprilTag Tracking ====================
-    // NOTE: Limelight is used ONLY for AprilTag tracking and shooter power
-    // Localization is handled exclusively by GoBilda Pinpoint odometry
 
     /**
      * Updates AprilTag tracking data from Limelight.
@@ -373,7 +306,6 @@ public class RedAutoLongv3 extends OpMode {
         return POWER_PRESETS[0];
     }
 
-
     /**
      * Aims turret using AprilTag autotracking.
      * Uses tx (horizontal offset) to calculate servo position.
@@ -450,7 +382,7 @@ public class RedAutoLongv3 extends OpMode {
     }
 
     // ==================== State Machine ====================
-    // Each shooting position fires 3 balls with intake running throughout
+    // Simplified: Start -> Shoot1 (3 balls) -> Waypoint1 (end)
 
     public void autonomousPathUpdate() {
         // Update KSV controller and velocity status every loop
@@ -470,19 +402,12 @@ public class RedAutoLongv3 extends OpMode {
             // ===== Score at Position 1 (3 balls) =====
             case 1:
                 if (!follower.isBusy()) {
-                    if (!arrivedAtShootPose) {
-                        // Just arrived - reset timer and wait for Limelight to detect AprilTag
-                        arrivedAtShootPose = true;
-                        actionTimer.resetTimer();
-                    } else if (actionTimer.getElapsedTimeSeconds() > LIMELIGHT_SETTLE_TIME) {
-                        // Limelight has had time to detect AprilTag
-                        arrivedAtShootPose = false;
-                        updateLimelightTracking();
-                        aimTurretWithTracking();
-                        updateShooterPower();  // Adjust power based on limelight distance
-                        ballsShot = 0;
-                        setPathState(2);
-                    }
+                    // Shooter already spinning - just update tracking and aim
+                    updateLimelightTracking();
+                    aimTurretWithTracking();
+                    updateShooterPower();  // Adjust power based on limelight distance
+                    ballsShot = 0;
+                    setPathState(2);
                 }
                 break;
 
@@ -493,7 +418,7 @@ public class RedAutoLongv3 extends OpMode {
                 updateShooterPower();  // Keep adjusting power as limelight refines
                 if (actionTimer.getElapsedTimeSeconds() > 0.5 &&
                         (shooterVelocityReached ||
-                        actionTimer.getElapsedTimeSeconds() > MAX_SPINUP_TIME)) {
+                                actionTimer.getElapsedTimeSeconds() > MAX_SPINUP_TIME)) {
                     startIntake();
                     pushSample();  // Run pusher continuously during shoot cycle
                     setPathState(3);
@@ -514,177 +439,22 @@ public class RedAutoLongv3 extends OpMode {
                     if (ballsShot < BALLS_PER_POSITION) {
                         setPathState(3);  // Pusher still running
                     } else {
-                        // Done shooting, move to next waypoint
+                        // Done shooting, move to waypoint 1 (end position)
                         pusherServo.setPower(0);  // Stop pusher
-                        stopShooter();
                         stopIntake();
+                        stopShooter();
                         follower.followPath(path2_toWaypoint1, true);
                         setPathState(5);
                     }
                 }
                 break;
 
-            // ===== Sweep 1: Waypoint 1 -> 2 -> 3 -> Shoot 2 =====
+            // ===== Drive to Waypoint 1 (End) =====
             case 5:
                 if (!follower.isBusy()) {
-                    // Ensure intake is running for sweeping
-                    startIntake();
-                    follower.setMaxPower(0.3);  // Slow down for sample sweep
-                    follower.followPath(path3_toWaypoint2, true);
-                    setPathState(6);
-                }
-                break;
-
-            case 6:
-                if (!follower.isBusy()) {
-                    follower.setMaxPower(1.0);  // Restore full speed
-                    stopIntake();  // Turn off intake after waypoint 2
-                    follower.followPath(path4_toWaypoint3, true);
-                    setPathState(7);
-                }
-                break;
-
-            case 7:
-                if (!follower.isBusy()) {
-                    follower.followPath(path5_toShoot2, true);
-                    // Start shooter while driving to allow motor to reach target RPM
-                    updateLimelightTracking();
-                    startShooter(2);
-                    setPathState(8);
-                }
-                break;
-
-            // ===== Score at Position 2 (3 balls) =====
-            case 8:
-                if (!follower.isBusy()) {
-                    if (!arrivedAtShootPose) {
-                        arrivedAtShootPose = true;
-                        actionTimer.resetTimer();
-                    } else if (actionTimer.getElapsedTimeSeconds() > LIMELIGHT_SETTLE_TIME) {
-                        arrivedAtShootPose = false;
-                        updateLimelightTracking();
-                        aimTurretWithTracking();
-                        updateShooterPower();  // Adjust power based on limelight distance
-                        ballsShot = 0;
-                        setPathState(9);
-                    }
-                }
-                break;
-
-            case 9:
-                // Wait 0.5s minimum for shooter to stabilize, then check velocity OR timeout
-                updateLimelightTracking();
-                aimTurretWithTracking();
-                updateShooterPower();  // Keep adjusting power as limelight refines
-                if (actionTimer.getElapsedTimeSeconds() > 0.5 &&
-                        (shooterVelocityReached ||
-                        actionTimer.getElapsedTimeSeconds() > MAX_SPINUP_TIME)) {
-                    startIntake();
-                    pushSample();  // Run pusher continuously during shoot cycle
-                    setPathState(10);
-                }
-                break;
-
-            case 10:
-                if (actionTimer.getElapsedTimeSeconds() > PUSH_TIME) {
-                    ballsShot++;
-                    setPathState(11);
-                }
-                break;
-
-            case 11:
-                if (actionTimer.getElapsedTimeSeconds() > RETRACT_TIME) {
-                    if (ballsShot < BALLS_PER_POSITION) {
-                        setPathState(10);  // Pusher still running
-                    } else {
-                        pusherServo.setPower(0);  // Stop pusher
-                        stopShooter();
-                        stopIntake();
-                        follower.followPath(path6_toWaypoint4, true);
-                        setPathState(12);
-                    }
-                }
-                break;
-
-            // ===== Sweep 2: Waypoint 4 -> 5 -> 6 -> Shoot 3 =====
-            case 12:
-                if (!follower.isBusy()) {
-                    // Ensure intake is running for sweeping
-                    startIntake();
-                    follower.setMaxPower(0.3);  // Slow down for sample sweep
-                    follower.followPath(path7_toWaypoint5, true);
-                    setPathState(13);
-                }
-                break;
-
-            case 13:
-                if (!follower.isBusy()) {
-                    follower.setMaxPower(1.0);  // Restore full speed
-                    stopIntake();  // Turn off intake after waypoint 5
-                    follower.followPath(path8_toWaypoint6, true);
-                    setPathState(14);
-                }
-                break;
-
-            case 14:
-                if (!follower.isBusy()) {
-                    follower.followPath(path9_toShoot3, true);
-                    // Start shooter while driving to allow motor to reach target RPM
-                    updateLimelightTracking();
-                    startShooter(3);
-                    setPathState(15);
-                }
-                break;
-
-            // ===== Score at Position 3 (3 balls) =====
-            case 15:
-                if (!follower.isBusy()) {
-                    if (!arrivedAtShootPose) {
-                        arrivedAtShootPose = true;
-                        actionTimer.resetTimer();
-                    } else if (actionTimer.getElapsedTimeSeconds() > LIMELIGHT_SETTLE_TIME) {
-                        arrivedAtShootPose = false;
-                        updateLimelightTracking();
-                        aimTurretWithTracking();
-                        updateShooterPower();  // Adjust power based on limelight distance
-                        ballsShot = 0;
-                        setPathState(16);
-                    }
-                }
-                break;
-
-            case 16:
-                // Wait 0.5s minimum for shooter to stabilize, then check velocity OR timeout
-                updateLimelightTracking();
-                aimTurretWithTracking();
-                updateShooterPower();  // Keep adjusting power as limelight refines
-                if (actionTimer.getElapsedTimeSeconds() > 0.5 &&
-                        (shooterVelocityReached ||
-                        actionTimer.getElapsedTimeSeconds() > MAX_SPINUP_TIME)) {
-                    startIntake();
-                    pushSample();  // Run pusher continuously during shoot cycle
-                    setPathState(17);
-                }
-                break;
-
-            case 17:
-                if (actionTimer.getElapsedTimeSeconds() > PUSH_TIME) {
-                    ballsShot++;
-                    setPathState(18);
-                }
-                break;
-
-            case 18:
-                if (actionTimer.getElapsedTimeSeconds() > RETRACT_TIME) {
-                    if (ballsShot < BALLS_PER_POSITION) {
-                        setPathState(17);  // Pusher still running
-                    } else {
-                        pusherServo.setPower(0);  // Stop pusher
-                        stopShooter();
-                        stopIntake();
-                        follower.followPath(path10_toWaypoint7, true);
-                        setPathState(19);
-                    }
+                    // All done!
+                    stopAllMechanisms();
+                    setPathState(-1);
                 }
                 break;
 
@@ -716,9 +486,19 @@ public class RedAutoLongv3 extends OpMode {
         frontIntake.setDirection(DcMotorSimple.Direction.FORWARD);
         frontIntake.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
 
+        rearIntake = hardwareMap.get(DcMotor.class, "rearIntake");
+        rearIntake.setDirection(DcMotorSimple.Direction.FORWARD);
+        rearIntake.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+
         // Initialize shooter motor with KSV open-loop control
-        shooter = hardwareMap.get(DcMotorEx.class, ShooterConfig.FLYWHEEL_MOTOR_NAME);
+        shooter = hardwareMap.get(DcMotorEx.class, ShooterConfig.FLYWHEEL_MOTOR_1_NAME);
         shooter.setDirection(DcMotorSimple.Direction.FORWARD);
+        shooter.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.FLOAT);
+        shooter.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
+        shooter.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
+
+        shooter = hardwareMap.get(DcMotorEx.class, ShooterConfig.FLYWHEEL_MOTOR_2_NAME);
+        shooter.setDirection(DcMotorSimple.Direction.REVERSE);
         shooter.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.FLOAT);
         shooter.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
         shooter.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
@@ -749,7 +529,7 @@ public class RedAutoLongv3 extends OpMode {
 
         // Display initialization info
         telemetry.addLine("════════════════════════════════");
-        telemetry.addLine("RedAutov3 - AUTO DISTANCE");
+        telemetry.addLine("BlueQuick - MINIMAL AUTO");
         telemetry.addLine("════════════════════════════════");
         telemetry.addLine("Localization: Pinpoint ONLY");
         telemetry.addLine("Limelight: Tracking & Power");

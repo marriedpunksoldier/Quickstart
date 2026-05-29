@@ -6,9 +6,8 @@ import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
-import com.qualcomm.robotcore.hardware.Servo;
+
 import org.firstinspires.ftc.teamcode.Shooter.ShooterConfig;
-import com.qualcomm.robotcore.hardware.CRServo;
 import com.qualcomm.robotcore.util.ElapsedTime;
 
 import java.util.Locale;
@@ -51,15 +50,9 @@ public class FlywheelShooterTest extends LinearOpMode {
     // Hardware
     private DcMotorEx shooter;
     private DcMotor frontIntake;
-    private CRServo pusherServo;
 
     // Intake power
     private static final double INTAKE_POWER = 1.0;
-
-    // Pusher servo positions
-    private static final double PUSHER_FORWARD_POWER = 1.0;
-    private static final double PUSHER_REVERSE_POWER = -1.0;
-    private boolean pusherExtended = false;
 
     // Distance presets in inches
     private final int[] DISTANCE_PRESETS = {24, 36, 48, 60, 72, 84, 96, 108, 120}; // 2ft, 3ft, 4ft, 5ft, 6ft, 7ft, 8ft, 9ft, 10ft
@@ -141,8 +134,7 @@ public class FlywheelShooterTest extends LinearOpMode {
             // Update motor based on current settings
             updateMotor();
 
-            // Handle pusher servo and intake
-            handlePusher();
+            // Handle intake
             handleIntake();
 
             // Display telemetry
@@ -154,7 +146,6 @@ public class FlywheelShooterTest extends LinearOpMode {
         // Stop all when OpMode ends
         shooter.setPower(0);
         frontIntake.setPower(0);
-        pusherServo.setPower(0);
     }
     
     /**
@@ -171,11 +162,6 @@ public class FlywheelShooterTest extends LinearOpMode {
         frontIntake = hardwareMap.get(DcMotor.class, "frontIntake");
         frontIntake.setDirection(DcMotorSimple.Direction.FORWARD);
         frontIntake.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
-
-        // Configure pusher servo
-        pusherServo = hardwareMap.get(CRServo.class, "pusherServo");
-        pusherServo.setPower(0);
-        pusherExtended = false;
 
     }
 
@@ -358,27 +344,6 @@ public class FlywheelShooterTest extends LinearOpMode {
     }
 
     /**
-     * Handle pusher servo control
-     * Right trigger: Push (extend servo)
-     * Release trigger: Retract servo
-     */
-    private void handlePusher() {
-        boolean rightTriggerPressed = gamepad1.right_trigger > 0.5;
-        boolean leftTriggerPressed = gamepad1.left_trigger > 0.5;
-
-        // Right trigger: Forward, Left trigger: Reverse, Neither: Stop
-        if (rightTriggerPressed) {
-            pusherServo.setPower(PUSHER_FORWARD_POWER);
-            pusherExtended = true;
-        } else if (leftTriggerPressed) {
-            pusherServo.setPower(PUSHER_REVERSE_POWER);
-            pusherExtended = false;
-        } else {
-            pusherServo.setPower(0);
-        }
-    }
-
-    /**
      * Handle intake motor control (gamepad2)
      * Left Bumper: Forward
      * Left Trigger: Reverse
@@ -465,9 +430,6 @@ public class FlywheelShooterTest extends LinearOpMode {
         telemetry.addLine("───────────────────────────────────────");
         telemetry.addData("Intake", frontIntake.getPower() > 0 ? "FORWARD" :
                 (frontIntake.getPower() < 0 ? "REVERSE" : "OFF"));
-        telemetry.addData("Pusher State", pusherExtended ? "EXTENDED" : "RETRACTED");
-        telemetry.addData("Pusher Power", String.format(Locale.US, "%.2f", pusherServo.getPower()));
-        telemetry.addLine("  GP1 Right/Left Trigger: Pusher Fwd/Rev");
         telemetry.addLine("  GP2 Left Bumper/Trigger: Intake Fwd/Rev");
 
         // KSV constants

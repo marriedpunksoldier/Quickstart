@@ -13,7 +13,6 @@ import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.hardware.Servo;
-import com.qualcomm.robotcore.hardware.CRServo;
 
 import org.firstinspires.ftc.robotcore.external.navigation.Pose3D;
 import org.firstinspires.ftc.teamcode.Shooter.ShooterConfig;
@@ -68,7 +67,6 @@ public class BlueTeleop extends OpMode {
     private DcMotor frontIntake;
     private DcMotorEx shooter;
     private Servo turretGear;
-    private CRServo pusherServo;
 
     // Limelight
     private Limelight3A limelight;
@@ -91,8 +89,6 @@ public class BlueTeleop extends OpMode {
     private static final double TURRET_CENTER = 0.5;
     private static final double TURRET_MIN = 0.0;
     private static final double TURRET_MAX = 1.0;
-    private static final double PUSHER_FORWARD_POWER = 1.0;
-    private static final double PUSHER_REVERSE_POWER = -1.0;
 
     // Limelight settings
     private static final int LIMELIGHT_PIPELINE = 5;
@@ -139,9 +135,7 @@ public class BlueTeleop extends OpMode {
 
         // Initialize servos
         turretGear = hardwareMap.get(Servo.class, "turretGear");
-        pusherServo = hardwareMap.get(CRServo.class, "pusherServo");
         turretGear.setPosition(TURRET_CENTER);
-        pusherServo.setPower(0);
         turretPosition = TURRET_CENTER;
 
         // Initialize Limelight
@@ -196,7 +190,6 @@ public class BlueTeleop extends OpMode {
         handleAutoDistanceToggle();
         handleDistanceSelection();
         handleShooter();
-        handlePusher();
         handleIntake();
         handleTurret();
 
@@ -441,24 +434,6 @@ public class BlueTeleop extends OpMode {
     }
 
     // ═══════════════════════════════════════════════════════════════════
-    // PUSHER CONTROL - GAMEPAD 2 (TRIGGERS)
-    // ═══════════════════════════════════════════════════════════════════
-
-    private void handlePusher() {
-        boolean rightTrigger = gamepad2.right_trigger > 0.5;
-        boolean leftTrigger = gamepad2.left_trigger > 0.5;
-
-        // Right trigger: Forward, Left trigger: Reverse, Neither: Stop
-        if (rightTrigger) {
-            pusherServo.setPower(PUSHER_FORWARD_POWER);
-        } else if (leftTrigger) {
-            pusherServo.setPower(PUSHER_REVERSE_POWER);
-        } else {
-            pusherServo.setPower(0);
-        }
-    }
-
-    // ═══════════════════════════════════════════════════════════════════
     // INTAKE CONTROL - GAMEPAD 2 (LEFT BUMPER / LEFT TRIGGER)
     // ═══════════════════════════════════════════════════════════════════
 
@@ -605,7 +580,6 @@ public class BlueTeleop extends OpMode {
             }
         }
         telemetry.addData("Turret", turretStatus);
-        telemetry.addData("Pusher", pusherServo.getPower() > 0 ? "FORWARD" : pusherServo.getPower() < 0 ? "REVERSE" : "STOPPED");
 
         // Limelight Info
         addLimelightTelemetry();
@@ -662,7 +636,6 @@ public class BlueTeleop extends OpMode {
         // Stop all mechanisms
         stopShooter();
         frontIntake.setPower(0);
-        pusherServo.setPower(0);
         indicator.setPosition(INDICATOR_OFF);
 
         // Stop Limelight

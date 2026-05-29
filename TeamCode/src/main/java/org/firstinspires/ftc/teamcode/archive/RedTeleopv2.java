@@ -1,4 +1,4 @@
-package org.firstinspires.ftc.teamcode;
+package org.firstinspires.ftc.teamcode.archive;
 
 import com.pedropathing.follower.Follower;
 import com.pedropathing.geometry.BezierLine;
@@ -8,14 +8,15 @@ import com.pedropathing.util.Timer;
 import com.qualcomm.hardware.limelightvision.LLResult;
 import com.qualcomm.hardware.limelightvision.LLResultTypes;
 import com.qualcomm.hardware.limelightvision.Limelight3A;
+import com.qualcomm.robotcore.eventloop.opmode.Disabled;
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import org.firstinspires.ftc.teamcode.Shooter.ShooterConfig;
+import com.qualcomm.robotcore.hardware.Gamepad;
 import com.qualcomm.robotcore.hardware.Servo;
-import com.qualcomm.robotcore.hardware.CRServo;
 import org.firstinspires.ftc.robotcore.external.navigation.Pose3D;
 import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 
@@ -52,6 +53,7 @@ import java.util.Locale;
  */
 
 @TeleOp(name = "Red Teleop v2", group = "TeleOp")
+@Disabled
 public class RedTeleopv2 extends OpMode {
     // ═══════════════════════════════════════════════════════════════════
     // DISTANCE-POWER LOOKUP TABLE
@@ -138,9 +140,9 @@ public class RedTeleopv2 extends OpMode {
 
     // Hardware - Drive motors handled by Pedro Pathing
     private DcMotor frontIntake;
+    private DcMotor rearIntake;
     private DcMotorEx shooter;
     private Servo turretGear;
-    private CRServo pusherServo;
 
     // Limelight
     private Limelight3A limelight;
@@ -164,9 +166,6 @@ public class RedTeleopv2 extends OpMode {
     private static final double TURRET_CENTER = 0.5;
     private static final double TURRET_MIN = 0.0;
     private static final double TURRET_MAX = 1.0;
-    private static final double PUSHER_FORWARD_POWER = 1.0;
-    private static final double PUSHER_REVERSE_POWER = -1.0;
-
     // Limelight settings
     // Reference: https://docs.limelightvision.io/docs/docs-limelight/apis/ftc-programming
     private static final int LIMELIGHT_PIPELINE = 2;  // Set to your vision pipeline index (0-9)
@@ -177,6 +176,7 @@ public class RedTeleopv2 extends OpMode {
     private double currentTargetRPM = 0;
     private boolean shooterRunning = false;
     private boolean shooterVelocityReached = false;
+    private boolean wasReadyToFire = false;
 
     // Turret position
     private double turretPosition = TURRET_CENTER;
@@ -207,18 +207,26 @@ public class RedTeleopv2 extends OpMode {
         frontIntake.setDirection(DcMotorSimple.Direction.FORWARD);
         frontIntake.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
 
+        rearIntake = hardwareMap.get(DcMotor.class, "rearIntake");
+        rearIntake.setDirection(DcMotorSimple.Direction.FORWARD);
+        rearIntake.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+
         // Initialize shooter motor with KSV open-loop control
-        shooter = hardwareMap.get(DcMotorEx.class, ShooterConfig.FLYWHEEL_MOTOR_NAME);
+        shooter = hardwareMap.get(DcMotorEx.class, ShooterConfig.FLYWHEEL_MOTOR_1_NAME);
         shooter.setDirection(DcMotorSimple.Direction.FORWARD);
+        shooter.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.FLOAT);
+        shooter.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
+        shooter.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
+
+        shooter = hardwareMap.get(DcMotorEx.class, ShooterConfig.FLYWHEEL_MOTOR_2_NAME);
+        shooter.setDirection(DcMotorSimple.Direction.REVERSE);
         shooter.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.FLOAT);
         shooter.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
         shooter.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
 
         // Initialize servos
         turretGear = hardwareMap.get(Servo.class, "turretGear");
-        pusherServo = hardwareMap.get(CRServo.class, "pusherServo");
         turretGear.setPosition(TURRET_CENTER);
-        pusherServo.setPower(0);
         turretPosition = TURRET_CENTER;
 
         // Initialize Limelight
@@ -299,14 +307,16 @@ public class RedTeleopv2 extends OpMode {
             handleShooter();
         }
 
-        // Pusher, intake, and turret always available
-        handlePusher();
+        // Intake and turret always available
         handleIntake();
         handleTurret();
 
         // Update shooter output and velocity status
         updateShooterOutput();
         updateShooterVelocityStatus();
+
+        // Rumble gamepad2 when AprilTag is locked and shooter is at target RPM
+        handleReadyRumble();
 
         // Update telemetry
         displayTelemetry();
@@ -698,22 +708,14 @@ public class RedTeleopv2 extends OpMode {
         shooterVelocityReached = Math.abs(currentTargetRPM - actualRPM) <= ShooterConfig.VELOCITY_TOLERANCE_RPM;
     }
 
-    // ═══════════════════════════════════════════════════════════════════
-    // PUSHER CONTROL - GAMEPAD 2 (TRIGGERS)
-    // ═══════════════════════════════════════════════════════════════════
-
-    private void handlePusher() {
-        boolean rightTrigger = gamepad2.right_trigger > 0.5;
-        boolean leftTrigger = gamepad2.left_trigger > 0.5;
-
-        // Right trigger: Forward, Left trigger: Reverse, Neither: Stop
-        if (rightTrigger) {
-            pusherServo.setPower(PUSHER_FORWARD_POWER);
-        } else if (leftTrigger) {
-            pusherServo.setPower(PUSHER_REVERSE_POWER);
-        } else {
-            pusherServo.setPower(0);
+    private void handleReadyRumble() {
+        boolean readyToFire = limelightHasTarget && shooterVelocityReached;
+        if (readyToFire && !wasReadyToFire) {
+            gamepad2.rumble(0.8, 0.8, Gamepad.RUMBLE_DURATION_CONTINUOUS);
+        } else if (!readyToFire && wasReadyToFire) {
+            gamepad2.stopRumble();
         }
+        wasReadyToFire = readyToFire;
     }
 
     // ═══════════════════════════════════════════════════════════════════
@@ -724,14 +726,17 @@ public class RedTeleopv2 extends OpMode {
         // Left bumper: Run intake forward
         if (gamepad2.left_bumper) {
             frontIntake.setPower(INTAKE_POWER);
+            rearIntake.setPower(INTAKE_POWER);
         }
         // Left trigger: Reverse intake
         else if (gamepad2.left_trigger > 0.5) {
             frontIntake.setPower(-INTAKE_POWER);
+            rearIntake.setPower(-INTAKE_POWER);
         }
         // No input: Stop intake
         else {
             frontIntake.setPower(0);
+            rearIntake.setPower(0);
         }
     }
 
@@ -879,7 +884,6 @@ public class RedTeleopv2 extends OpMode {
             }
         }
         telemetry.addData("Turret", turretStatus);
-        telemetry.addData("Pusher", pusherServo.getPower() > 0 ? "FORWARD" : pusherServo.getPower() < 0 ? "REVERSE" : "STOPPED");
 
         // Limelight Info
         addLimelightTelemetry();
@@ -958,7 +962,7 @@ public class RedTeleopv2 extends OpMode {
         // Stop all mechanisms
         stopShooter();
         frontIntake.setPower(0);
-        pusherServo.setPower(0);
+        rearIntake.setPower(0);
         indicator.setPosition(INDICATOR_OFF);
 
         // Stop Limelight

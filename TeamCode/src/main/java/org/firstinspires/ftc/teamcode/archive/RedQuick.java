@@ -1,4 +1,4 @@
-package org.firstinspires.ftc.teamcode;
+package org.firstinspires.ftc.teamcode.archive;
 
 import com.pedropathing.follower.Follower;
 import com.pedropathing.geometry.BezierLine;
@@ -9,20 +9,21 @@ import com.qualcomm.hardware.limelightvision.LLResult;
 import com.qualcomm.hardware.limelightvision.LLResultTypes;
 import com.qualcomm.hardware.limelightvision.Limelight3A;
 import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
+import com.qualcomm.robotcore.eventloop.opmode.Disabled;
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import org.firstinspires.ftc.teamcode.Shooter.ShooterConfig;
 import com.qualcomm.robotcore.hardware.Servo;
-import com.qualcomm.robotcore.hardware.CRServo;
 import org.firstinspires.ftc.robotcore.external.navigation.Pose3D;
 import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 import java.util.List;
 import java.util.Locale;
 
-@Autonomous(name = "BlueQuick", group = "Autonomous")
-public class BlueQuick extends OpMode{
+@Autonomous(name = "RedQuick", group = "Autonomous")
+@Disabled
+public class RedQuick extends OpMode{
     // Pedro Pathing
     private Follower follower;
     private Timer pathTimer, actionTimer, opmodeTimer;
@@ -30,9 +31,9 @@ public class BlueQuick extends OpMode{
 
     // Hardware
     private DcMotor frontIntake;
+    private DcMotor rearIntake;
     private DcMotorEx shooter;
     private Servo turretGear;
-    private CRServo pusherServo;
 
     // Limelight
     private Limelight3A limelight;
@@ -72,18 +73,15 @@ public class BlueQuick extends OpMode{
     private static final double TURRET_DEGREES_PER_SERVO_UNIT = 90.0;
 
     // Target AprilTag ID (-1 = use any/closest tag)
-    private static final int TARGET_APRILTAG_ID = 20;
+    private static final int TARGET_APRILTAG_ID = 24;
 
     // Limelight settings
-    private static final int LIMELIGHT_PIPELINE = 1;  // Configure this pipeline for AprilTag detection with appropriate camera settings
+    private static final int LIMELIGHT_PIPELINE = 2;  // Configure this pipeline for AprilTag detection with appropriate camera settings
 
     // ═══════════════════════════════════════════════════════════════════
 
     // Constants for servo positions and motor powers
     private static final double INTAKE_POWER = 1.0;
-    private static final double PUSHER_FORWARD_POWER = 1.0;
-    private static final double PUSHER_REVERSE_POWER = -1.0;
-
     // Timing constants (in seconds)
     private static final double PUSH_TIME = 0.2;     // Time to wait while pushing a ball
     private static final double RETRACT_TIME = 0.5;  // Time to wait after retracting for balls to move through intake
@@ -106,13 +104,13 @@ public class BlueQuick extends OpMode{
 
     // ==================== Poses ====================
     // Start position
-    private final Pose startPose = new Pose(56, 8, Math.toRadians(90));
+    private final Pose startPose = new Pose(88, 8, Math.toRadians(90));
 
     // Shooting position
-    private final Pose shoot1Pose = new Pose(59.54530477759472, 16.843492586490928, Math.toRadians(115));
+    private final Pose shoot1Pose = new Pose(85.07215815485998, 17.555189456342667, Math.toRadians(65));
 
     // Waypoint (end position)
-    private final Pose waypoint1Pose = new Pose(38.02800658978585, 13.26688632619441, Math.toRadians(-90));
+    private final Pose waypoint1Pose = new Pose(108.07742998352553, 11.426688632619447, Math.toRadians(90));
 
     // ==================== Path Chains ====================
     private PathChain path1_toShoot1;
@@ -122,13 +120,14 @@ public class BlueQuick extends OpMode{
         // Path 1: Start -> Shoot 1
         path1_toShoot1 = follower.pathBuilder()
                 .addPath(new BezierLine(startPose, shoot1Pose))
-                .setLinearHeadingInterpolation(Math.toRadians(90), Math.toRadians(115))
+                .setLinearHeadingInterpolation(Math.toRadians(90), Math.toRadians(65))
+
                 .build();
 
         // Path 2: Shoot 1 -> Waypoint 1 (end position)
         path2_toWaypoint1 = follower.pathBuilder()
                 .addPath(new BezierLine(shoot1Pose, waypoint1Pose))
-                .setLinearHeadingInterpolation(Math.toRadians(115), Math.toRadians(90))
+                .setLinearHeadingInterpolation(Math.toRadians(65), Math.toRadians(90))
                 .build();
     }
 
@@ -136,10 +135,12 @@ public class BlueQuick extends OpMode{
 
     private void startIntake() {
         frontIntake.setPower(INTAKE_POWER);
+        rearIntake.setPower(INTAKE_POWER);
     }
 
     private void stopIntake() {
         frontIntake.setPower(0);
+        rearIntake.setPower(0);
     }
 
     /**
@@ -155,40 +156,22 @@ public class BlueQuick extends OpMode{
         currentTargetRPM = power * ShooterConfig.MOTOR_FREE_SPEED_RPM;
     }
 
-    /**
-     * Updates shooter target RPM based on current limelight distance.
-     * Call this while shooter is spinning to adjust power dynamically.
-     */
     private void updateShooterPower() {
-        if (currentTargetRPM <= 0) return;  // Shooter not running
-
+        if (currentTargetRPM <= 0) return;
         double power = limelightHasTarget ? autoPowerLevel : FALLBACK_SHOOTER_POWER;
         currentTargetRPM = power * ShooterConfig.MOTOR_FREE_SPEED_RPM;
     }
 
-    /**
-     * Applies KSV motor output every loop iteration.
-     * Must be called in every loop/autonomousPathUpdate cycle.
-     */
     private void updateShooterOutput() {
-        if (currentTargetRPM <= 0) {
-            shooter.setPower(0);
-            return;
-        }
+        if (currentTargetRPM <= 0) { shooter.setPower(0); return; }
         double actualRPM = (shooter.getVelocity() / ShooterConfig.TICKS_PER_REV) * 60.0;
         double feedForward = ShooterConfig.KV_INITIAL * currentTargetRPM + ShooterConfig.KS_INITIAL;
         double pTerm = ShooterConfig.KP_INITIAL * (currentTargetRPM - actualRPM);
         shooter.setPower(Math.max(0.0, Math.min(1.0, feedForward + pTerm)));
     }
 
-    /**
-     * Check if shooter has reached target RPM
-     */
     private void updateShooterVelocityStatus() {
-        if (currentTargetRPM <= 0) {
-            shooterVelocityReached = false;
-            return;
-        }
+        if (currentTargetRPM <= 0) { shooterVelocityReached = false; return; }
         double actualRPM = (shooter.getVelocity() / ShooterConfig.TICKS_PER_REV) * 60.0;
         shooterVelocityReached = Math.abs(currentTargetRPM - actualRPM) <= ShooterConfig.VELOCITY_TOLERANCE_RPM;
     }
@@ -199,18 +182,9 @@ public class BlueQuick extends OpMode{
         shooterVelocityReached = false;
     }
 
-    private void pushSample() {
-        pusherServo.setPower(PUSHER_FORWARD_POWER);
-    }
-
-    private void retractPusher() {
-        pusherServo.setPower(PUSHER_REVERSE_POWER);
-    }
-
     private void stopAllMechanisms() {
         stopIntake();
         stopShooter();
-        pusherServo.setPower(0);
     }
 
     // ==================== Limelight AprilTag Tracking ====================
@@ -415,7 +389,6 @@ public class BlueQuick extends OpMode{
                         (shooterVelocityReached ||
                                 actionTimer.getElapsedTimeSeconds() > MAX_SPINUP_TIME)) {
                     startIntake();
-                    pushSample();  // Run pusher continuously during shoot cycle
                     setPathState(3);
                 }
                 break;
@@ -435,7 +408,6 @@ public class BlueQuick extends OpMode{
                         setPathState(3);  // Pusher still running
                     } else {
                         // Done shooting, move to waypoint 1 (end position)
-                        pusherServo.setPower(0);  // Stop pusher
                         stopIntake();
                         stopShooter();
                         follower.followPath(path2_toWaypoint1, true);
@@ -481,18 +453,26 @@ public class BlueQuick extends OpMode{
         frontIntake.setDirection(DcMotorSimple.Direction.FORWARD);
         frontIntake.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
 
+        rearIntake = hardwareMap.get(DcMotor.class, "rearIntake");
+        rearIntake.setDirection(DcMotorSimple.Direction.FORWARD);
+        rearIntake.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+
         // Initialize shooter motor with KSV open-loop control
-        shooter = hardwareMap.get(DcMotorEx.class, ShooterConfig.FLYWHEEL_MOTOR_NAME);
+        shooter = hardwareMap.get(DcMotorEx.class, ShooterConfig.FLYWHEEL_MOTOR_1_NAME);
         shooter.setDirection(DcMotorSimple.Direction.FORWARD);
+        shooter.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.FLOAT);
+        shooter.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
+        shooter.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
+
+        shooter = hardwareMap.get(DcMotorEx.class, ShooterConfig.FLYWHEEL_MOTOR_2_NAME);
+        shooter.setDirection(DcMotorSimple.Direction.REVERSE);
         shooter.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.FLOAT);
         shooter.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
         shooter.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
 
         // Initialize servos
         turretGear = hardwareMap.get(Servo.class, "turretGear");
-        pusherServo = hardwareMap.get(CRServo.class, "pusherServo");
         turretGear.setPosition(TURRET_CENTER);
-        pusherServo.setPower(0);
         turretPosition = TURRET_CENTER;
 
         // Initialize Limelight (for tracking ONLY, not localization)
@@ -514,7 +494,7 @@ public class BlueQuick extends OpMode{
 
         // Display initialization info
         telemetry.addLine("════════════════════════════════");
-        telemetry.addLine("BlueQuick - MINIMAL AUTO");
+        telemetry.addLine("RedQuick - MINIMAL AUTO");
         telemetry.addLine("════════════════════════════════");
         telemetry.addLine("Localization: Pinpoint ONLY");
         telemetry.addLine("Limelight: Tracking & Power");
@@ -570,7 +550,6 @@ public class BlueQuick extends OpMode{
         // Telemetry - Mechanisms
         telemetry.addLine("─── MECHANISMS ───");
         telemetry.addData("Intake", frontIntake.getPower() > 0 ? "ON" : "OFF");
-        telemetry.addData("Pusher", pusherServo.getPower() > 0 ? "FORWARD" : pusherServo.getPower() < 0 ? "REVERSE" : "STOPPED");
 
         telemetry.update();
     }
